@@ -118,6 +118,9 @@ export class AppController {
     // loads), which left the privacy screen up until the user switched away and back.
     win.on('focus', () => this.emit({ type: 'window-focus', focused: true }));
     win.on('blur', () => this.emit({ type: 'window-focus', focused: false }));
+    win.once('closed', () => {
+      if (this.window === win) this.window = undefined;
+    });
   }
 
   isWindowFocused(): boolean {
@@ -165,7 +168,11 @@ export class AppController {
 
   emit(event: AppEvent): void {
     if (this.throttled(event)) return;
-    if (this.window && !this.window.isDestroyed()) this.window.webContents.send(EVENT_CHANNEL, event);
+    // While a window closes, Windows can still report a blur after its page is gone, and sending to
+    // that page throws "Object has been destroyed" as an error dialog.
+    const win = this.window;
+    if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
+    win.webContents.send(EVENT_CHANNEL, event);
   }
 
   /**
