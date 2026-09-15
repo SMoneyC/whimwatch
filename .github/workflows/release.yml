@@ -97,8 +97,13 @@ jobs:
       - name: Build installers
         shell: bash
         run: |
+          # Secrets that don't exist arrive as empty strings. electron-builder's macOS signing treats an
+          # empty CSC_LINK as a certificate path ("… not a file"), so remove every empty one.
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then unset "$name"; fi
+          done
           args=(--${{ matrix.platform }} --publish never)
-          if [ -z "$CSC_LINK" ]; then
+          if [ -z "${CSC_LINK:-}" ]; then
             export CSC_IDENTITY_AUTO_DISCOVERY=false
             if [ "${{ matrix.platform }}" = mac ]; then
               # Ad-hoc signature: Apple silicon refuses to open an unsigned app ("damaged"). electron-builder's
