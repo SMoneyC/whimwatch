@@ -12,7 +12,21 @@ updates:
         patterns: ['electron', 'electron-builder', 'electron-vite', '@electron/*']
       dev-tooling:
         dependency-type: development
-        exclude-patterns: ['electron', 'electron-builder', 'electron-vite']
+        exclude-patterns: ['electron', 'electron-builder', 'electron-vite', '@electron/*']
+    # Major versions the rest of the tooling can't use yet. One of them in a group makes `npm ci`
+    # (or lint) fail for the whole group, so they wait here. Remove a rule once its reason is gone.
+    ignore:
+      # electron-vite 5 supports Vite 5 to 7; plugin-react 6 needs Vite 8. Update with electron-vite 6.
+      - dependency-name: vite
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@vitejs/plugin-react'
+        update-types: ['version-update:semver-major']
+      # typescript-eslint doesn't support TypeScript 7 yet.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # Types match the Node version CI and the scripts run on (.nvmrc).
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
