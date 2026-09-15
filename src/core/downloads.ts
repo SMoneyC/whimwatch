@@ -1,6 +1,6 @@
 import { createWriteStream } from 'node:fs';
 import { mkdir, rm } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, join, posix } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream } from 'node:stream/web';
@@ -89,11 +89,22 @@ function hostOf(url: string): string {
   }
 }
 
+/**
+ * A file name from a site, safe to create on every system. Always splits paths the POSIX way (after
+ * turning backslashes into slashes): on Windows, basename() would read "a:b.zip" as a drive letter.
+ */
 export function safeFileName(name: string): string {
-  // Control characters are exactly what this strips.
-  // eslint-disable-next-line no-control-regex
-  const cleaned = basename(name.replace(/\\/g, '/')).replace(/[<>:"|?*\x00-\x1f]/g, '_').trim();
-  return cleaned && cleaned !== '.' && cleaned !== '..' ? cleaned : 'download';
+  const cleaned = posix
+    .basename(name.replace(/\\/g, '/'))
+    // Control characters are exactly what this strips.
+    // eslint-disable-next-line no-control-regex
+    .replace(/[<>:"|?*\x00-\x1f]/g, '_')
+    .trim()
+    // Windows drops trailing dots and spaces from names.
+    .replace(/[. ]+$/, '');
+  if (!cleaned) return 'download';
+  // Names Windows reserves for devices, with or without an extension.
+  return /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(cleaned) ? `_${cleaned}` : cleaned;
 }
 
 export async function downloadWickedCc(remote: RemoteInfo, dir: string, fetcher: Fetcher, onProgress: ProgressFn, signal?: AbortSignal): Promise<string> {

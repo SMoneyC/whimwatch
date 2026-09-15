@@ -174,7 +174,8 @@ describe('scan cache and state migration', () => {
 describe('packaging', () => {
   it('ships only the build output on every platform', async () => {
     // A platform's `files` list replaces the top-level one; with only exclusions it packages the whole project.
-    const config = await readFile(join(import.meta.dirname, '..', 'electron-builder.yml'), 'utf8');
+    // Windows checkouts can have CRLF line endings.
+    const config = (await readFile(join(import.meta.dirname, '..', 'electron-builder.yml'), 'utf8')).replace(/\r\n/g, '\n');
     const lists = [...config.matchAll(/^( *)files:\n((?:\1 +- .*\n)+)/gm)].map((m) => m[2]!.split('\n').map((l) => l.trim().replace(/^- /, '')).filter(Boolean));
     expect(lists.length).toBe(4); // top level, win, mac, linux
     for (const list of lists) {

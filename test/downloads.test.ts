@@ -24,5 +24,11 @@ describe('download helpers', () => {
   it('never returns an empty or special name', () => {
     expect(safeFileName('..')).toBe('download');
     expect(safeFileName('a:b?.zip')).toBe('a_b_.zip');
+    // Read the same on every system: not a drive letter on Windows, not a folder anywhere.
+    expect(safeFileName('C:evil.package')).toBe('C_evil.package');
+    expect(safeFileName('C:\\Users\\x\\evil.package')).toBe('evil.package');
+    expect(safeFileName('WW_Pack.zip. . ')).toBe('WW_Pack.zip');
+    expect(safeFileName('CON.zip')).toBe('_CON.zip');
+    expect(safeFileName('Console.zip')).toBe('Console.zip');
   });
 });

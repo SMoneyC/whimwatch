@@ -34,7 +34,8 @@ for (const asar of asars) {
   const maps = entries.filter((e) => e.startsWith('/out/') && e.endsWith('.map'));
   const required = ['/out/main/index.js', '/out/renderer/index.html', '/out/renderer/licenses/LICENSE.txt', '/out/renderer/licenses/THIRD_PARTY_LICENSES.txt'];
   const missing = required.filter((r) => !entries.includes(r));
-  const html = entries.includes('/out/renderer/index.html') ? extractFile(asar, 'out/renderer/index.html').toString('utf8') : '';
+  // @electron/asar splits paths on the system separator, so build this one with join() for Windows.
+  const html = entries.includes('/out/renderer/index.html') ? extractFile(asar, join('out', 'renderer', 'index.html')).toString('utf8') : '';
   const csp = /<meta http-equiv="Content-Security-Policy" content="([^"]*)"/.exec(html)?.[1]?.replace(/&#39;/g, "'");
   const problems = [
     ...stray.slice(0, 20).map((e) => `unexpected file: ${e}`),

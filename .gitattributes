@@ -1,0 +1,2 @@
+# Same LF line endings on every system, including Windows checkouts (CI and contributors).
+* text=auto eol=lf
