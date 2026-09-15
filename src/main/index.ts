@@ -1,3 +1,4 @@
+import { release } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, globalShortcut, Menu, nativeTheme, session, shell } from 'electron';
@@ -15,6 +16,9 @@ const devServerUrl = !app.isPackaged ? process.env.ELECTRON_RENDERER_URL : undef
 
 app.setName('WhimWatch');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
+// WSL's graphics (WSLg) lack the OpenGL ES 3 support Chromium's GPU process needs: it logs a burst of
+// errors, exits, and Chromium falls back to software rendering anyway. Start with software rendering.
+if (process.platform === 'linux' && (process.env.WSL_DISTRO_NAME || /microsoft/i.test(release()))) app.disableHardwareAcceleration();
 // If "Remove all data" is still deleting the last run's folders, let it finish before Chromium opens them.
 waitForDataRemoval(app.getPath('temp'));
 
@@ -52,9 +56,22 @@ if (process.argv.includes('--smoke')) {
   app.quit();
 } else {
   let mainWindow: BrowserWindow | undefined;
+  let relaunchRequested = false;
 
   app.on('second-instance', () => {
+    // Still starting up: the window appears on its own.
     if (!mainWindow) return;
+    if (mainWindow.isDestroyed()) {
+      // The window is closed and WhimWatch is still quitting (e.g. clearing browsing data), so it can't
+      // show anything. Open it again once this run has exited.
+      if (!relaunchRequested) {
+        relaunchRequested = true;
+        // The portable build runs from a temporary copy that's removed on exit; restart the .exe itself.
+        const portable = process.env.PORTABLE_EXECUTABLE_FILE;
+        app.relaunch(portable ? { execPath: portable, args: [] } : undefined);
+      }
+      return;
+    }
     // Also brings back a window put away with quick hide.
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
@@ -111,9 +128,13 @@ if (process.argv.includes('--smoke')) {
       if (cleared || !clearBrowsingDataOnExit || controller.removingData) return;
       event.preventDefault();
       cleared = true;
-      void clearSiteBrowsingData(sessionsToClear(), !forgetSignInsOnExit)
-        .catch((err: Error) => console.warn('Clearing browsing data failed:', err.message))
-        .finally(() => app.quit());
+      // Never let a stuck cleanup keep WhimWatch running without a window (it holds the single-instance
+      // lock, so it couldn't be opened again). The next launch removes leftovers from disk anyway.
+      const giveUp = new Promise<void>((resolve) => setTimeout(resolve, 10_000));
+      void Promise.race([
+        clearSiteBrowsingData(sessionsToClear(), !forgetSignInsOnExit).catch((err: Error) => console.warn('Clearing browsing data failed:', err.message)),
+        giveUp,
+      ]).finally(() => app.quit());
     });
 
     mainWindow.webContents.once('did-finish-load', () => {
