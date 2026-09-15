@@ -1,0 +1,380 @@
+import { randomUUID } from 'node:crypto';
+import { rm } from 'node:fs/promises';
+import { basename, join } from 'node:path';
+import { ARCHIVE_FILE, extractDownload, MOD_FILE } from '../core/archive.js';
+import { dirSize, hasLiveBackup, removeDir } from '../core/backups.js';
+import { runBatch, StopBatchError } from '../core/batch.js';
+import { CORE_KEY } from '../core/check.js';
+import { CancelledError, throwIfCancelled } from '../core/fetcher.js';
+import { applyInstall, markUnchanged, planInstall, undoInstall } from '../core/installer.js';
+import { isGameRunning } from '../core/process.js';
+import { chooseRemote } from '../core/source-choice.js';
+import type { AppSnapshot, BatchState, StorageInfo, UpdateChoice, UpdatePlan, UpdateStage } from '../shared/api.js';
+import { SOURCE_LABEL } from '../shared/labels.js';
+import type { CheckResult, LocalFile, RemoteInfo } from '../shared/types.js';
+import { laterSources, laterSourcesText, updatableRemotes } from '../shared/updatable.js';
+import { sessionsToClear, siteSession } from './browser.js';
+import type { AppController } from './controller.js';
+import { downloadForRemote, type Offer, offerFileCount, resolveOffer } from './downloads.js';
+import { clearLog } from './log.js';
+import { clearSiteBrowsingData } from './privacy.js';
+
+interface UpdateTarget {
+  name: string;
+  files: LocalFile[];
+  remotes: RemoteInfo[];
+  /** WickedWhims itself always comes from its wicked.cc page. */
+  fixedRemote?: RemoteInfo;
+}
+
+interface InstallMeta {
+  batchId?: string;
+  automatic?: boolean;
+}
+
+interface PlanOptions {
+  /** Automatic installs: never use LoversLab/Patreon accounts. */
+  publicOnly?: boolean;
+}
+
+export class Updater {
+  private plans = new Map<string, { plan: UpdatePlan; workDir: string }>();
+  /** Preparation in progress; asking again for the same update reuses it. */
+  private preparing = new Map<string, Promise<UpdatePlan>>();
+  private busy = false;
+  private batchRunning = false;
+  private stopRequested = false;
+  /** Cancel switches for updates being prepared, by creator key. */
+  private aborts = new Map<string, AbortController>();
+
+  constructor(
+    private readonly controller: AppController,
+    /** Downloads being prepared; emptied on every start. */
+    readonly tempRoot: string,
+  ) {}
+
+  async plan(key: unknown, listingUrl?: unknown, opts: PlanOptions = {}): Promise<UpdatePlan> {
+    if (typeof key !== 'string') throw new Error('Expected a creator key');
+    const url = typeof listingUrl === 'string' ? listingUrl : undefined;
+    const id = `${key}|${url ?? ''}|${opts.publicOnly ? 'public' : 'any'}`;
+    const pending = this.preparing.get(id);
+    if (pending) return pending;
+    const promise = this.exclusive(() => this.prepare(key, url, opts)).finally(() => this.preparing.delete(id));
+    this.preparing.set(id, promise);
+    return promise;
+  }
+
+  async apply(planId: unknown, choice: unknown, meta: InstallMeta = {}): Promise<AppSnapshot> {
+    const entry = typeof planId === 'string' ? this.plans.get(planId) : undefined;
+    if (!entry) throw new Error('This update is no longer ready. Please try again.');
+    const c = (choice ?? {}) as Partial<Record<keyof UpdateChoice, unknown>>;
+    const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string') : []);
+    return this.exclusive(() => this.install(entry, { remove: strings(c.remove), skip: strings(c.skip) }, meta));
+  }
+
+  async undo(id: unknown): Promise<AppSnapshot> {
+    const record = this.controller.currentState.installs.find((i) => i.id === id);
+    if (!record) throw new Error('Unknown update');
+    return this.exclusive(async () => this.controller.replaceInstall(await undoInstall(record)));
+  }
+
+  /** Undoes every install from one run, newest first; stops at the first that can't be undone. */
+  async undoBatch(batchId: unknown): Promise<AppSnapshot> {
+    if (typeof batchId !== 'string') throw new Error('Unknown update');
+    const records = this.controller.currentState.installs.filter((i) => i.batchId === batchId && hasLiveBackup(i)).reverse();
+    if (!records.length) throw new Error('Nothing from that run can be undone any more.');
+    return this.exclusive(async () => {
+      let snapshot: AppSnapshot | undefined;
+      for (const record of records) snapshot = await this.controller.replaceInstall(await undoInstall(record));
+      return snapshot!;
+    });
+  }
+
+  /**
+   * "Update all": plans and installs each creator in turn with the defaults
+   * (every downloaded file, nothing removed). Keeps going when one fails.
+   */
+  async updateAll(keys: unknown, opts: PlanOptions & { skipIfWarnings?: boolean; automatic?: boolean } = {}): Promise<BatchState | undefined> {
+    if (this.batchRunning) throw new Error('Already updating.');
+    const requested = Array.isArray(keys) ? keys.filter((k): k is string => typeof k === 'string') : [];
+    const items = requested.flatMap((key) => {
+      const target = this.target(key);
+      const likely = target?.fixedRemote ?? (target && updatableRemotes(target.remotes, this.signedIn(opts))[0]);
+      return target && likely ? [{ key, name: target.name, source: SOURCE_LABEL[likely.listing.source] }] : [];
+    });
+    if (!items.length) return undefined;
+
+    this.batchRunning = true;
+    this.stopRequested = false;
+    const batchId = randomUUID();
+    try {
+      return await runBatch(
+        items,
+        async (key) => {
+          try {
+            const plan = await this.plan(key, undefined, opts);
+            if (plan.warnings.some((w) => w.startsWith('The Sims 4 is running'))) {
+              throw new StopBatchError('Close The Sims 4 first, then run Update all again.');
+            }
+            if (plan.upToDate) {
+              await this.discardPlans(key);
+              await this.controller.markSeen(key, plan.downloadUrl, { automatic: true });
+              const label = SOURCE_LABEL[plan.source];
+              if (this.controller.statusOf(key) !== 'update-available') return `Already up to date: your files match ${label}`;
+              const later = laterSources(this.target(key)?.remotes ?? [], plan.downloadUrl);
+              return later.length
+                ? `Your files match ${label}. ${laterSourcesText(later)}, so open ${later.length === 1 ? 'it' : 'those'} to see what's new.`
+                : `Your files match ${label}, but another source looks newer. Open the creator's pages to see what's new.`;
+            }
+            if (!plan.files.length) throw new Error("The download doesn't contain any .package or .ts4script files.");
+            if (opts.skipIfWarnings && plan.warnings.length) throw new Error(`Needs a look: ${plan.warnings[0]}`);
+            await this.apply(plan.id, { remove: [], skip: [] }, { batchId, automatic: opts.automatic });
+            const changed = plan.files.filter((f) => !f.unchanged);
+            return {
+              message: `Installed ${changed.length} file${changed.length === 1 ? '' : 's'} from ${SOURCE_LABEL[plan.source]}${plan.warnings.length ? ` (${plan.warnings[0]})` : ''}`,
+              replaced: changed.filter((f) => f.kind === 'replace').length,
+              added: changed.filter((f) => f.kind === 'add').length,
+            };
+          } catch (err) {
+            // Don't leave a failed item's downloads in temp until the next launch.
+            await this.discardPlans(key);
+            throw err;
+          }
+        },
+        (state) => this.controller.setBatch(state),
+        () => this.stopRequested,
+        batchId,
+      );
+    } finally {
+      this.batchRunning = false;
+    }
+  }
+
+  stopUpdateAll(): void {
+    this.stopRequested = true;
+  }
+
+  isBusy(): boolean {
+    return this.busy || this.batchRunning || this.preparing.size > 0;
+  }
+
+  /** Stops preparing an update and throws away its downloads (installs can't be interrupted). */
+  async cancel(key: unknown): Promise<void> {
+    if (typeof key !== 'string') return;
+    this.aborts.get(key)?.abort();
+    await this.discardPlans(key);
+  }
+
+  cancelUpdateAll(): void {
+    this.stopRequested = true;
+    for (const abort of this.aborts.values()) abort.abort();
+  }
+
+  /** Downloads never survive a restart (plans live in memory), so anything left is safe to delete. */
+  async clearLeftoverDownloads(): Promise<void> {
+    await removeDir(this.tempRoot);
+  }
+
+  async storage(): Promise<StorageInfo> {
+    const webCache = await Promise.all((['loverslab', 'patreon'] as const).map((site) => siteSession(site).getCacheSize()));
+    return {
+      backups: await dirSize(this.controller.backupRoot),
+      caches: (await dirSize(this.tempRoot)) + webCache.reduce((a, b) => a + b, 0),
+    };
+  }
+
+  /** Leftover downloads, the log, and everything the LoversLab/Patreon browsers stored except sign-ins. */
+  async clearCaches(): Promise<StorageInfo> {
+    if (this.isBusy()) throw new Error('Wait for the current update to finish first.');
+    this.plans.clear();
+    clearLog();
+    await removeDir(this.tempRoot);
+    for (const site of ['loverslab', 'patreon'] as const) this.controller.pool.reset(site);
+    await clearSiteBrowsingData(sessionsToClear(), true);
+    return this.storage();
+  }
+
+  /** After a check: install wicked.cc updates that need no decisions (setting "install automatically"). */
+  async autoInstall(result: CheckResult): Promise<void> {
+    const keys = result.creators.filter((c) => c.status === 'update-available').map((c) => c.key);
+    if (result.core.status === 'update-available') keys.unshift(CORE_KEY);
+    const batch = await this.updateAll(keys, { publicOnly: true, skipIfWarnings: true, automatic: true }).catch((err: Error) => {
+      console.warn('Automatic updates failed:', err.message);
+      return undefined;
+    });
+    const installed = batch?.items.filter((i) => i.state === 'done' && i.replaced !== undefined).length ?? 0;
+    if (batch?.batchId && installed) this.controller.emit({ type: 'auto-installed', batchId: batch.batchId, count: installed });
+  }
+
+  private async prepare(key: string, listingUrl: string | undefined, opts: PlanOptions): Promise<UpdatePlan> {
+    const progress = this.progressFor(key);
+    const abort = new AbortController();
+    this.aborts.set(key, abort);
+    const workDir = join(this.tempRoot, randomUUID());
+    const pool = this.controller.pool;
+    try {
+      const target = this.target(key);
+      // Offers found while comparing sources are reused, so the site isn't asked twice.
+      const offers = new Map<string, Offer>();
+      const remote =
+        target?.fixedRemote ??
+        (target &&
+          (await chooseRemote(target.remotes, {
+            signedIn: (site) => this.controller.isSignedIn(site),
+            publicOnly: opts.publicOnly,
+            listingUrl,
+            signal: abort.signal,
+            onCompare: () => progress('resolving', 'Comparing sources…'),
+            countFiles: async (r) => {
+              const offer = await resolveOffer(r, pool, { probe: true, signal: abort.signal });
+              offers.set(r.listing.url, offer);
+              return offerFileCount(offer);
+            },
+          })));
+      if (!target || !remote) {
+        throw new Error(
+          listingUrl
+            ? "That source can't be downloaded from right now."
+            : opts.publicOnly
+              ? 'No source that works without signing in.'
+              : 'No downloadable source for this update. Sign in to LoversLab or Patreon, or download it yourself.',
+        );
+      }
+      await this.discardPlans(key);
+      const label = SOURCE_LABEL[remote.listing.source];
+      progress('resolving', `Finding the download on ${label}…`);
+      const downloads = await downloadForRemote(
+        remote,
+        join(workDir, 'download'),
+        { fetcher: pool.fetcher(), pool },
+        (received, total, file) => {
+          const which = file.count > 1 ? ` file ${file.index + 1} of ${file.count}:` : '';
+          progress('downloading', `Downloading from ${label}${which} ${bytes(received)}${total ? ` of ${bytes(total)}` : ''}`, received, total);
+        },
+        abort.signal,
+        offers.get(remote.listing.url),
+      );
+      throwIfCancelled(abort.signal);
+
+      progress('extracting', 'Unpacking…');
+      const extractedDir = join(workDir, 'files');
+      const extractedFiles: string[] = [];
+      const notMods: string[] = [];
+      for (const [index, file] of downloads.entries()) {
+        const name = basename(file);
+        if (!ARCHIVE_FILE.test(name) && !MOD_FILE.test(name)) {
+          notMods.push(name);
+          continue;
+        }
+        // Keep each download's contents apart so same-named files inside different archives don't collide.
+        const sub = downloads.length > 1 ? `${index + 1}-${name}` : '';
+        extractedFiles.push(...(await extractDownload(file, join(extractedDir, sub), abort.signal)).map((f) => join(sub, f)));
+      }
+      throwIfCancelled(abort.signal);
+
+      progress('extracting', 'Comparing with your installed files…');
+      const plan = planInstall({
+        id: basename(workDir),
+        creatorKey: key,
+        name: target.name,
+        downloadUrl: remote.listing.url,
+        source: remote.listing.source,
+        downloads: downloads.map((d) => basename(d)),
+        extractedDir,
+        extractedFiles,
+        installedFiles: target.files,
+        modsRoots: this.controller.currentState.dirs,
+      });
+      plan.skipped.push(...notMods);
+      await markUnchanged(plan, abort.signal);
+      if (await isGameRunning()) plan.warnings.unshift('The Sims 4 is running. Close it before installing.');
+      this.plans.set(plan.id, { plan, workDir });
+      progress('done', plan.upToDate ? `Already up to date with ${label}` : `Ready to install from ${label}`);
+      return plan;
+    } catch (err) {
+      const cancelled = abort.signal.aborted;
+      progress('error', cancelled ? 'Cancelled' : (err as Error).message);
+      await rm(workDir, { recursive: true, force: true });
+      throw cancelled ? new CancelledError() : err;
+    } finally {
+      if (this.aborts.get(key) === abort) this.aborts.delete(key);
+    }
+  }
+
+  private async install(entry: { plan: UpdatePlan; workDir: string }, choice: UpdateChoice, meta: InstallMeta): Promise<AppSnapshot> {
+    const { plan, workDir } = entry;
+    const progress = this.progressFor(plan.creatorKey);
+    progress('installing', 'Installing…');
+    try {
+      const record = await applyInstall({
+        plan,
+        remove: choice.remove,
+        skip: choice.skip,
+        backupRoot: this.controller.backupRoot,
+        modsRoots: this.controller.currentState.dirs,
+      });
+      this.plans.delete(plan.id);
+      await rm(workDir, { recursive: true, force: true });
+      progress('done', `Updated ${plan.name}`);
+      return await this.controller.recordInstall({ ...record, source: plan.source, batchId: meta.batchId, automatic: meta.automatic || undefined });
+    } catch (err) {
+      progress('error', (err as Error).message);
+      throw err;
+    }
+  }
+
+  /** Drops earlier prepared downloads for a creator (e.g. after switching source). */
+  private async discardPlans(creatorKey: string): Promise<void> {
+    for (const [id, entry] of this.plans) {
+      if (entry.plan.creatorKey !== creatorKey) continue;
+      this.plans.delete(id);
+      await rm(entry.workDir, { recursive: true, force: true });
+    }
+  }
+
+  private signedIn(opts: PlanOptions): (site: 'loverslab' | 'patreon') => boolean {
+    return (site) => !opts.publicOnly && this.controller.isSignedIn(site);
+  }
+
+  private target(key: string): UpdateTarget | undefined {
+    const result = this.controller.currentState.lastResult;
+    if (!result) return undefined;
+    if (key === CORE_KEY) {
+      const core = result.core;
+      if (!core.downloadPageUrl?.includes('wicked.cc')) return undefined;
+      return {
+        name: 'WickedWhims',
+        files: core.installedFiles ?? (core.installed ? [core.installed] : []),
+        remotes: [],
+        fixedRemote: {
+          listing: { source: 'wickedcc', url: core.downloadPageUrl, origin: 'directory' },
+          checkedAt: result.finishedAt,
+          status: 'ok',
+          updatedAt: core.releasedAt,
+        },
+      };
+    }
+    const creator = result.creators.find((c) => c.key === key);
+    return creator && { name: creator.name, files: creator.files, remotes: creator.remotes };
+  }
+
+  private progressFor(creatorKey: string) {
+    return (stage: UpdateStage, message: string, received?: number, total?: number): void =>
+      this.controller.emit({ type: 'update-progress', progress: { creatorKey, stage, message, received, total } });
+  }
+
+  private async exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.busy) throw new Error('Another update is in progress.');
+    this.busy = true;
+    try {
+      return await fn();
+    } finally {
+      this.busy = false;
+    }
+  }
+}
+
+function bytes(n: number): string {
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / 1024 / 1024).toFixed(n < 100 * 1024 * 1024 ? 1 : 0)} MB`;
+}

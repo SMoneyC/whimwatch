@@ -1,0 +1,80 @@
+# Must match APP_ID in src/shared/config.ts, and must not change after the first release.
+appId: io.github.forthewhimsy.whimwatch
+productName: WhimWatch
+copyright: Copyright © 2026 WhimWatch contributors
+directories:
+  output: dist
+  buildResources: build
+# Only the build output and package.json ship. Each platform's `files` below REPLACES this list (it
+# isn't merged), so they repeat it: a list with only exclusions would package the whole project.
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+# Executables and WebAssembly must live outside app.asar to be run/loaded.
+asarUnpack:
+  - node_modules/7zip-bin/**
+  # The RAR worker thread loads node-unrar-js from disk.
+  - node_modules/node-unrar-js/**
+electronFuses:
+  runAsNode: false
+  # Sign-in cookies for LoversLab/Patreon are encrypted at rest (DPAPI / Keychain / libsecret).
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+win:
+  # Each platform ships only its own 7-Zip binary.
+  files:
+    - out/**
+    - package.json
+    - '!**/*.map'
+    - '!node_modules/7zip-bin/{linux,mac}/**'
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+# One click: installs for the current user (no administrator prompt), adds a Start menu entry and opens
+# the app. No desktop shortcut, so nothing extra appears on a shared computer's desktop.
+nsis:
+  artifactName: ${productName}-Setup-${version}.${ext}
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: false
+  runAfterFinish: true
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+mac:
+  category: public.app-category.utilities
+  files:
+    - out/**
+    - package.json
+    - '!**/*.map'
+    - '!node_modules/7zip-bin/{linux,win}/**'
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  artifactName: ${productName}-${version}-${arch}.${ext}
+linux:
+  category: Utility
+  synopsis: Keeps track of updates for your mods
+  maintainer: WhimWatch contributors <https://github.com/forthewhimsy/whimwatch>
+  files:
+    - out/**
+    - package.json
+    - '!**/*.map'
+    - '!node_modules/7zip-bin/{mac,win}/**'
+  target:
+    # .deb for Debian/Ubuntu and .rpm for Fedora/openSUSE install through the system's software app.
+    # Ubuntu 24.04+ blocks the Chromium sandbox inside AppImages, so those distributions should use the .deb.
+    - target: deb
+      arch: [x64]
+    - target: rpm
+      arch: [x64]
+    - target: AppImage
+      arch: [x64]
+  artifactName: ${productName}-${version}-${arch}.${ext}
+publish:
+  provider: github

@@ -1,0 +1,78 @@
+{
+  "name": "whimwatch",
+  "version": "0.1.0",
+  "description": "Keeps track of updates for your mods.",
+  "keywords": [
+    "sims4",
+    "the-sims-4",
+    "wickedwhims",
+    "mods",
+    "updater",
+    "electron"
+  ],
+  "homepage": "https://github.com/forthewhimsy/whimwatch#readme",
+  "bugs": {
+    "url": "https://github.com/forthewhimsy/whimwatch/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/forthewhimsy/whimwatch.git"
+  },
+  "license": "MIT",
+  "funding": "https://buymeacoffee.com/forthewhimsy",
+  "author": "WhimWatch contributors",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "scan": "tsx scripts/scan.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "smoke:app": "electron-vite build && electron . --smoke",
+    "scan:app": "electron-vite build && electron . --scan",
+    "dist": "electron-vite build && electron-builder",
+    "check-package": "tsx scripts/check-package.ts",
+    "dist:dir": "electron-vite build && electron-builder --dir"
+  },
+  "dependencies": {
+    "7zip-bin": "5.2.0",
+    "cheerio": "1.2.0",
+    "megajs": "1.3.10",
+    "node-unrar-js": "2.0.2",
+    "yauzl": "3.4.0"
+  },
+  "devDependencies": {
+    "@electron/asar": "3.4.1",
+    "@eslint/js": "10.0.1",
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
+    "@fontsource-variable/manrope": "5.3.0",
+    "@types/node": "22.20.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/yauzl": "2.10.3",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "eslint": "10.10.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.12.0",
+    "lucide-react": "1.46.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tsx": "4.23.13",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.0",
+    "vite": "7.3.6",
+    "vitest": "5.0.0"
+  }
+}

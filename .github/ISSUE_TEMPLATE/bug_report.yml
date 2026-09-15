@@ -1,0 +1,26 @@
+name: Bug report
+description: Something in WhimWatch doesn't work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please don't paste passwords, cookies or links that require your login.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: In WhimWatch, open Settings → Help & about → **Diagnostics…**, read it over, then copy and paste it here. It has no creator names or page addresses, and your home folder path is hidden.
+      render: text
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11 / macOS 15 / Ubuntu 24.04

@@ -1,0 +1,225 @@
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import * as cheerio from 'cheerio';
+import {
+  DOWNLOADABLE,
+  DownloadUnavailableError,
+  downloadExternal,
+  downloadWickedCc,
+  externalLinks,
+  isAllowedDownloadHost,
+  singleExternalLink,
+  MAX_DOWNLOAD_BYTES,
+  type ProgressFn,
+  safeFileName,
+} from '../core/downloads.js';
+import { CancelledError, type Fetcher, throwIfCancelled } from '../core/fetcher.js';
+import { parseDownloadChooser } from '../core/sources/loverslab.js';
+import { linkedPostIds, parsePostDetail, patreonPostId, type PatreonPostDetail, postDetailApiUrl, releaseDownloads } from '../core/sources/patreon.js';
+import type { RemoteInfo } from '../shared/types.js';
+import { type BrowserPool, type BrowserSite, useSiteSession } from './browser.js';
+
+/** Progress for one file of a (possibly multi-file) download. */
+export type FileProgressFn = (received: number, total: number | undefined, file: { index: number; count: number }) => void;
+
+/**
+ * What a LoversLab page or Patreon post offers:
+ * - `files`: direct download links (all get downloaded)
+ * - `external`: a single Mega/Google Drive link
+ * - `button`: LoversLab's download button, not yet followed. It answers with
+ *   either the file itself or a chooser page listing several files.
+ */
+export type Offer = { files: string[] } | { external: string } | { button: string };
+
+/**
+ * Downloads everything the listing offers for the newest version into `dir`
+ * and returns the paths. `offer` reuses what source comparison already found.
+ */
+export async function downloadForRemote(
+  remote: RemoteInfo,
+  dir: string,
+  deps: { fetcher: Fetcher; pool: BrowserPool },
+  onProgress: FileProgressFn,
+  signal?: AbortSignal,
+  offer?: Offer,
+): Promise<string[]> {
+  await mkdir(dir, { recursive: true });
+  switch (remote.listing.source) {
+    case 'wickedcc':
+      return [await downloadWickedCc(remote, dir, deps.fetcher, (r, t) => onProgress(r, t, { index: 0, count: 1 }), signal)];
+    case 'loverslab':
+    case 'patreon': {
+      const site = remote.listing.source;
+      const resolved = offer ?? (await resolveOffer(remote, deps.pool, { probe: false, signal }));
+      return downloadOffer(site, resolved, dir, onProgress, signal);
+    }
+    default:
+      throw new DownloadUnavailableError('This source has no downloads.');
+  }
+}
+
+/**
+ * Finds what a LoversLab/Patreon source offers. With `probe`, LoversLab's
+ * download button is looked at too, so the number of files is known (used only
+ * to break ties between sources; it costs one extra request).
+ */
+export async function resolveOffer(remote: RemoteInfo, pool: BrowserPool, opts: { probe: boolean; signal?: AbortSignal }): Promise<Offer> {
+  if (remote.listing.source === 'patreon') return patreonOffer(remote, pool, opts.signal);
+  if (remote.listing.source !== 'loverslab') throw new DownloadUnavailableError('This source has no downloads.');
+  const offer = await loversLabOffer(remote.listing.url, pool, opts.signal);
+  if (!opts.probe || !('button' in offer)) return offer;
+
+  const probe = await pool.probeInPage(remote.listing.url, offer.button);
+  throwIfCancelled(opts.signal);
+  if (probe.status >= 400) throw new Error(`LoversLab returned HTTP ${probe.status}`);
+  return probe.body ? chooserOffer(probe.body, remote.listing.url) : { files: [offer.button] };
+}
+
+export function offerFileCount(offer: Offer): number {
+  return 'files' in offer ? offer.files.length : 1;
+}
+
+async function loversLabOffer(fileUrl: string, pool: BrowserPool, signal?: AbortSignal): Promise<Offer> {
+  const page = await pool.fetcher().browserGet!(fileUrl);
+  throwIfCancelled(signal);
+  const $ = cheerio.load(page.body);
+  const button = $('a[href*="do=download"]').first().attr('href');
+  if (button) return { button: new URL(button, fileUrl).toString() };
+
+  const external = externalLinks($);
+  if (external) return { external };
+  if (/sign in|log in|register/i.test($('.ipsType_warning, .ipsMessage').text())) {
+    throw new DownloadUnavailableError('LoversLab wants you to sign in again (Settings → Accounts).');
+  }
+  throw new DownloadUnavailableError('No download button on the LoversLab page. The files may be hosted elsewhere; open the page to check.');
+}
+
+/** Mod files listed on LoversLab's chooser page (screenshots and readmes are skipped). */
+function chooserOffer(html: string, pageUrl: string): Offer {
+  const listed = parseDownloadChooser(html, pageUrl);
+  const files = listed.filter((f) => !f.name || DOWNLOADABLE.test(f.name)).map((f) => f.href);
+  if (!files.length) throw new DownloadUnavailableError('The LoversLab page has no mod files to download.');
+  return { files };
+}
+
+/**
+ * Patreon files can be attached to the release post itself, sit in another post it links to (some creators
+ * keep one "download files" post and swap its file each release), or be a Mega/Google Drive link.
+ */
+async function patreonOffer(remote: RemoteInfo, pool: BrowserPool, signal?: AbortSignal): Promise<Offer> {
+  const postUrl = remote.downloadUrl;
+  const postId = postUrl ? patreonPostId(postUrl) : undefined;
+  if (!postUrl || !postId) throw new DownloadUnavailableError('Could not find the Patreon post for this update.');
+
+  const release = await patreonPost(pool, postUrl, postId, signal);
+  if (!release.viewable) throw new DownloadUnavailableError("Your Patreon membership doesn't include this post.");
+
+  const linked: PatreonPostDetail[] = [];
+  if (!release.files.some((f) => DOWNLOADABLE.test(f.name))) {
+    for (const id of linkedPostIds(release)) {
+      try {
+        linked.push(await patreonPost(pool, postUrl, id, signal));
+      } catch (err) {
+        if (err instanceof CancelledError) throw err;
+        // A linked post that's deleted or out of reach just doesn't contribute files.
+      }
+    }
+  }
+
+  const files = releaseDownloads(release, linked, DOWNLOADABLE);
+  if (files.length) return { files: files.map((f) => f.url) };
+  const external = singleExternalLink(release.links);
+  if (external) return { external };
+  throw new DownloadUnavailableError('No downloadable file found in the Patreon post or the posts it links to. Open the post to check.');
+}
+
+async function patreonPost(pool: BrowserPool, pageUrl: string, postId: string, signal?: AbortSignal): Promise<PatreonPostDetail> {
+  const res = await pool.fetcher().browserFetch!(pageUrl, postDetailApiUrl(postId));
+  throwIfCancelled(signal);
+  if (res.status !== 200) throw new Error(`Patreon returned HTTP ${res.status}`);
+  return parsePostDetail(res.body);
+}
+
+async function downloadOffer(site: BrowserSite, offer: Offer, dir: string, onProgress: FileProgressFn, signal?: AbortSignal): Promise<string[]> {
+  if ('external' in offer) return [await downloadExternal(offer.external, dir, (r, t) => onProgress(r, t, { index: 0, count: 1 }), signal)];
+  if ('files' in offer) return downloadAll(site, offer.files, dir, onProgress, signal);
+
+  // One request: LoversLab answers the button with the file, or with a chooser page for several files.
+  const first = await downloadViaSession(site, offer.button, dir, (r, t) => onProgress(r, t, { index: 0, count: 1 }), signal);
+  if (!first.html) return [first.path];
+  const html = await readFile(first.path, 'utf8');
+  await rm(first.path, { force: true });
+  return downloadOffer(site, chooserOffer(html, offer.button), dir, onProgress, signal);
+}
+
+/** Downloads one after another (never in parallel) to stay gentle with the site. */
+async function downloadAll(site: BrowserSite, urls: string[], dir: string, onProgress: FileProgressFn, signal?: AbortSignal): Promise<string[]> {
+  const paths: string[] = [];
+  for (const [index, url] of urls.entries()) {
+    throwIfCancelled(signal);
+    const result = await downloadViaSession(site, url, dir, (r, t) => onProgress(r, t, { index, count: urls.length }), signal);
+    if (result.html) {
+      await rm(result.path, { force: true });
+      throw new DownloadUnavailableError('The site returned a web page instead of the file. Open the page to download it yourself.');
+    }
+    paths.push(result.path);
+  }
+  return paths;
+}
+
+/**
+ * Downloads with the site's signed-in browser session (cookies, Cloudflare
+ * clearance). Every URL in the redirect chain must be on the allowlist.
+ */
+function downloadViaSession(
+  site: BrowserSite,
+  url: string,
+  dir: string,
+  onProgress: ProgressFn,
+  signal?: AbortSignal,
+): Promise<{ path: string; html: boolean }> {
+  if (!isAllowedDownloadHost(url)) throw new DownloadUnavailableError(`Downloads from ${new URL(url).hostname} aren't supported.`);
+  const ses = useSiteSession(site);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      ses.off('will-download', onWillDownload);
+      reject(new DownloadUnavailableError("The download didn't start. Open the page in your browser to check."));
+    }, 60_000);
+    const onWillDownload = (_event: Electron.Event, item: Electron.DownloadItem): void => {
+      clearTimeout(timer);
+      ses.off('will-download', onWillDownload);
+      const chain = item.getURLChain();
+      if (!chain.every(isAllowedDownloadHost)) {
+        item.cancel();
+        reject(new DownloadUnavailableError('The download redirected to a site WhimWatch doesn\'t download from.'));
+        return;
+      }
+      const html = /^text\/html/i.test(item.getMimeType());
+      const path = uniquePath(dir, html ? 'page.html' : safeFileName(item.getFilename()));
+      item.setSavePath(path);
+      const abort = (): void => item.cancel();
+      signal?.addEventListener('abort', abort, { once: true });
+      if (signal?.aborted) item.cancel();
+      item.on('updated', () => {
+        const total = item.getTotalBytes() || undefined;
+        if (item.getReceivedBytes() > MAX_DOWNLOAD_BYTES) item.cancel();
+        if (!html) onProgress(item.getReceivedBytes(), total);
+      });
+      item.once('done', (_e, state) => {
+        signal?.removeEventListener('abort', abort);
+        if (state === 'completed') resolve({ path, html });
+        else reject(signal?.aborted ? new CancelledError() : new Error(`Download ${state}`));
+      });
+    };
+    ses.on('will-download', onWillDownload);
+    ses.downloadURL(url);
+  });
+}
+
+/** Two attachments can share a file name; keep both. Downloads run one at a time, so checking the disk is enough. */
+function uniquePath(dir: string, name: string): string {
+  let path = join(dir, name);
+  for (let n = 2; existsSync(path); n++) path = join(dir, name.replace(/(\.[^.]+)?$/, ` (${n})$1`));
+  return path;
+}

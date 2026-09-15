@@ -1,0 +1,19 @@
+# The app loads third-party sites in Electron, and only the newest Electron
+# versions get security fixes, so dependency updates matter here.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      electron:
+        patterns: ['electron', 'electron-builder', 'electron-vite', '@electron/*']
+      dev-tooling:
+        dependency-type: development
+        exclude-patterns: ['electron', 'electron-builder', 'electron-vite']
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

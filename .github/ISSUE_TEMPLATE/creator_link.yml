@@ -1,0 +1,21 @@
+name: Add or fix a creator link
+description: A creator isn't found, or WhimWatch uses the wrong page for them.
+labels: [catalog]
+body:
+  - type: input
+    id: creator
+    attributes:
+      label: Creator name as shown in WhimWatch
+    validations:
+      required: true
+  - type: textarea
+    id: links
+    attributes:
+      label: Correct public pages
+      description: The creator's own wicked.cc pages, LoversLab file pages (/files/file/…) or Patreon page. Sites that re-upload their packs can't be used.
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: Wrong links WhimWatch uses (if any)

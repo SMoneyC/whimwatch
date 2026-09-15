@@ -1,0 +1,23 @@
+name: A site changed and checks broke
+description: wicked.cc, LoversLab, Patreon or the WickedWhims page shows errors or wrong dates.
+labels: [site-change]
+body:
+  - type: dropdown
+    id: site
+    attributes:
+      label: Which site?
+      options: [wickedwhimsmod.com, wicked.cc, LoversLab, Patreon]
+    validations:
+      required: true
+  - type: textarea
+    id: symptom
+    attributes:
+      label: What's wrong?
+      description: The error shown under Sources, or which date/version is wrong. A public page URL that shows the problem helps.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics (Settings → Help & about → Diagnostics…)
+      render: text

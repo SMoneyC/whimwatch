@@ -1,0 +1,9 @@
+node_modules/
+out/
+dist/
+*.tsbuildinfo
+*.log
+.DS_Store
+# Never commit third-party mod files
+*.package
+*.ts4script

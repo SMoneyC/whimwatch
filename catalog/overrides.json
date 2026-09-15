@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "aliases": {
+    "e404pheight": "e404p",
+    "error404phillips": "e404p",
+    "oll": "ooolalaworld",
+    "ollanimationsap": "ooolalaworld"
+  },
+  "creators": {
+    "alchemist": {
+      "name": "Alchemist",
+      "links": ["https://www.patreon.com/SimsAlchemist"]
+    },
+    "atrois": {
+      "name": "ATrois",
+      "links": ["https://www.patreon.com/ATrois"]
+    },
+    "e404p": {
+      "name": "E404P",
+      "links": ["https://www.patreon.com/cw/error404phillips"]
+    },
+    "lamaboy": {
+      "name": "LAMABOY",
+      "links": ["https://www.patreon.com/LAMABOY"]
+    },
+    "motherlodesims": {
+      "name": "MotherLodeSims",
+      "links": [
+        "https://www.loverslab.com/files/file/4440-sims-4-motherlodesims-sex-animations-for-whickedwhims-new-update-03192026/",
+        "https://www.patreon.com/cw/motherlodesims"
+      ]
+    },
+    "ooolalaworld": {
+      "name": "ooOLaLa World",
+      "links": [
+        "https://wicked.cc/animations/ooolalaworld/450-anims-ooolala-worlds-sex-animations-for-wickedwhims-ts4",
+        "https://www.patreon.com/cw/ooOLaLaWorld"
+      ]
+    }
+  }
+}

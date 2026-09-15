@@ -1,0 +1,61 @@
+import type { InstallRecord, SeenEvent } from '../../shared/types';
+
+export type HistoryItem =
+  | { kind: 'batch'; id: string; at: number; records: InstallRecord[] }
+  | { kind: 'install'; id: string; at: number; record: InstallRecord }
+  | { kind: 'seen'; id: string; at: number; event: SeenEvent };
+
+export type HistoryFilter = 'all' | 'updates' | 'seen' | 'undone';
+
+/** Installs from one "Update all" run become one entry; everything is newest first. */
+export function historyItems(installs: InstallRecord[], seen: SeenEvent[]): HistoryItem[] {
+  const items: HistoryItem[] = [];
+  const batches = new Map<string, InstallRecord[]>();
+  for (const record of installs) {
+    if (record.batchId) batches.set(record.batchId, [...(batches.get(record.batchId) ?? []), record]);
+    else items.push({ kind: 'install', id: record.id, at: record.at, record });
+  }
+  for (const [id, records] of batches) {
+    if (records.length === 1) items.push({ kind: 'install', id: records[0]!.id, at: records[0]!.at, record: records[0]! });
+    else items.push({ kind: 'batch', id, at: Math.max(...records.map((r) => r.at)), records });
+  }
+  for (const event of seen) items.push({ kind: 'seen', id: event.id, at: event.at, event });
+  return items.sort((a, b) => b.at - a.at);
+}
+
+export function isUndone(item: HistoryItem): boolean {
+  if (item.kind === 'seen') return item.event.undoneAt !== undefined;
+  if (item.kind === 'install') return item.record.undoneAt !== undefined;
+  return item.records.every((r) => r.undoneAt !== undefined);
+}
+
+export function matchesFilter(item: HistoryItem, filter: HistoryFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'undone') return isUndone(item);
+  if (filter === 'seen') return item.kind === 'seen';
+  return item.kind !== 'seen';
+}
+
+export function fileCounts(records: InstallRecord[]): { replaced: number; added: number; removed: number } {
+  const ops = records.flatMap((r) => r.operations);
+  return {
+    replaced: ops.filter((o) => o.kind === 'replace').length,
+    added: ops.filter((o) => o.kind === 'add').length,
+    removed: ops.filter((o) => o.kind === 'remove').length,
+  };
+}
+
+/** Day headings: "Today", "Yesterday", "Friday, Sep 11" this past month, then "August" / "August 2025". */
+export function dayLabel(t: number, now = Date.now()): string {
+  const day = (x: number): number => {
+    const d = new Date(x);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  };
+  const days = Math.round((day(now) - day(t)) / 86_400_000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  const date = new Date(t);
+  if (days < 30) return new Intl.DateTimeFormat('en', { weekday: 'long', month: 'short', day: 'numeric' }).format(date);
+  const sameYear = date.getFullYear() === new Date(now).getFullYear();
+  return new Intl.DateTimeFormat('en', sameYear ? { month: 'long' } : { month: 'long', year: 'numeric' }).format(date);
+}
