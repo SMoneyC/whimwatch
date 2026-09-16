@@ -9,7 +9,9 @@
 </p>
 
 ## From the Author
-I'm forthewhimsy, and I'm a gamer and software dev who was sick of manually curating my WickedWhims animations, and finally did something about it.
+I'm forthewhimsy, and I'm a gamer and software dev who was sick of manually curating my WickedWhims animations.
+
+Then I remembered that - unlike my Sims - I actually have agency and I finally did something about it.
 
 Now I want to share that with the rest of the community so that we can all remove the chore of maintaining our library of WW packages, and focus on why we're all gathered here: FUN.
 
