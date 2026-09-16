@@ -5,7 +5,7 @@
 <h1 align="center">WhimWatch</h1>
 
 <p align="center">
-  <strong>An always free, always open-source update checker and updater for the WickedWhims Sims 4 mod and its animation packs.</strong>
+  <strong>An always free, always open-source, always privacy-focused update checker and updater for the WickedWhims Sims 4 mod and its animation packs.</strong>
 </p>
 
 ## From the Author
