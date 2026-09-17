@@ -179,4 +179,20 @@ jobs:
         run: |
           flags=(--draft --verify-tag --title "WhimWatch $VERSION" --notes-file notes.md)
           case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
-          gh release create "$GITHUB_REF_NAME" assets/* "${flags[@]}" --repo "$GITHUB_REPOSITORY"
+
+          # The installers run to hundreds of megabytes and the upload is slow enough to time out.
+          # Creating the release with its assets in one command isn't safe to retry: gh re-sends an
+          # asset that had already landed, and GitHub refuses the duplicate name, failing the whole
+          # release. So make the release first, then upload one file at a time with --clobber, which
+          # replaces a half-uploaded asset instead of stopping on it.
+          draft=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || true)
+          if [ -z "$draft" ]; then
+            gh release create "$GITHUB_REF_NAME" "${flags[@]}" --repo "$GITHUB_REPOSITORY"
+          elif [ "$draft" != "true" ]; then
+            echo "::error::$GITHUB_REF_NAME is already released. Bump the version instead of re-tagging."
+            exit 1
+          fi
+          for asset in assets/*; do
+            echo "Uploading $(basename "$asset")"
+            gh release upload "$GITHUB_REF_NAME" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
+          done
