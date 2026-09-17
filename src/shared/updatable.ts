@@ -49,12 +49,18 @@ export function laterSources(remotes: RemoteInfo[], listingUrl: string): RemoteI
   return [...newest.values()].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-/** "Patreon was updated later, on Sep 14" or "Patreon (Sep 14) and wicked.cc (Sep 2) were updated later". */
-export function laterSourcesText(later: RemoteInfo[], now = Date.now()): string {
+/**
+ * "Patreon was updated later, on Sep 14" or "Patreon (Sep 14) and wicked.cc (Sep 2) were updated
+ * later". With `checkedSource`, a page of that same site reads as "another wicked.cc page":
+ * creators with several pages on one site are common, and "wicked.cc was updated later" under
+ * "Nothing new on wicked.cc" says nothing useful.
+ */
+export function laterSourcesText(later: RemoteInfo[], now = Date.now(), checkedSource?: SourceId): string {
+  const name = (r: RemoteInfo): string => (r.listing.source === checkedSource ? `another ${SOURCE_LABEL[r.listing.source]} page` : SOURCE_LABEL[r.listing.source]);
   const [only] = later;
   if (!only) return '';
-  if (later.length === 1) return `${SOURCE_LABEL[only.listing.source]} was updated later, on ${formatShortDate(only.updatedAt, now)}`;
-  const parts = later.map((r) => `${SOURCE_LABEL[r.listing.source]} (${formatShortDate(r.updatedAt, now)})`);
+  if (later.length === 1) return `${name(only)} was updated later, on ${formatShortDate(only.updatedAt, now)}`;
+  const parts = later.map((r) => `${name(r)} (${formatShortDate(r.updatedAt, now)})`);
   return `${[parts.slice(0, -1).join(', '), parts.at(-1)].join(' and ')} were updated later`;
 }
 

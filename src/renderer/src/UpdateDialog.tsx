@@ -107,6 +107,13 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
   const otherWarnings = plan?.warnings.filter((w) => !isGameWarning(w)) ?? [];
   const nothingChosen = chosenReplace + chosenAdd + remove.length === 0;
   const later = plan?.upToDate ? laterSources(creator?.remotes ?? [], plan.downloadUrl) : [];
+  /**
+   * This page has nothing to install, yet the creator still counts as updated: something else of
+   * theirs is newer. Taken from the creator's own status, the same thing the row says, so the two
+   * can't disagree — "Mark as seen" here must clear the row, and marking only up to this page's
+   * date wouldn't when a later page exists.
+   */
+  const newerElsewhere = Boolean(plan?.upToDate && creator?.status === 'update-available');
 
   const stopChecking = async (site: UpdateSite): Promise<void> => {
     const label = SOURCE_LABEL[site];
@@ -154,13 +161,14 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
             <Button
               variant="primary"
               onClick={async () => {
-                // With a newer post elsewhere, hide that one too, like "Mark as seen" on the creator's row.
-                const newest = later.length ? creator?.remoteUpdatedAt : undefined;
+                // Something newer of theirs is out there: hide that too, or this would say
+                // "marked as seen" and leave the creator sitting on Update ready.
+                const newest = newerElsewhere ? creator?.remoteUpdatedAt : undefined;
                 const seen = await app.run(() => (newest !== undefined ? api.dismiss(target.key, newest) : api.markSeen(target.key, plan.downloadUrl)));
                 if (seen) close();
               }}
             >
-              {later.length ? 'Mark all as seen' : 'Mark as seen'}
+              {newerElsewhere ? 'Mark all as seen' : 'Mark as seen'}
             </Button>
           ) : (
             <Button variant="primary" icon={gameOpen ? Gamepad2 : Download} onClick={install} disabled={!plan || installing || gameOpen || nothingChosen}>
@@ -232,18 +240,21 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
       )}
 
       {plan?.upToDate && (
-        later.length ? (
+        newerElsewhere ? (
           <Banner
             tone="info"
-            title={`Nothing new on ${shownLabel ?? 'this source'}`}
+            title={`Nothing new on this ${shownLabel ?? 'source'} page`}
             actions={later.map((r) => (
               <Button key={r.listing.url} size="sm" icon={ExternalLink} onClick={() => app.run(() => api.openExternal(r.listing.url))}>
-                Open {SOURCE_LABEL[r.listing.source]}
+                {r.listing.source === plan?.source ? 'Open the newer page' : `Open ${SOURCE_LABEL[r.listing.source]}`}
               </Button>
             ))}
           >
             <p>
-              Your files match the ones on {shownLabel ?? 'this source'}. {laterSourcesText(later)}, so the new release may only be there.
+              Your files match the ones on this page, so there's nothing to install here.{' '}
+              {later.length
+                ? `${laterSourcesText(later, undefined, plan?.source)}, so the new release may only be there.`
+                : `Another page of ${target.name}'s is newer than your files — often a pack you don't have. Marking all as seen hides this until something newer still appears.`}
             </p>
             {later.map((r) => {
               const site = r.listing.source as UpdateSite;

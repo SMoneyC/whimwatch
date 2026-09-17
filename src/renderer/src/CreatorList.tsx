@@ -137,6 +137,7 @@ function CreatorDetails({ creator: c, app, adding, onAdding }: { creator: Creato
   const snapshot = app.snapshot!;
   const hideTitles = snapshot.settings.hidePageTitles;
   const progress = app.updates[c.key];
+  const busy = progress !== undefined && progress.stage !== 'done' && progress.stage !== 'error';
   const seenUndo = c.status === 'up-to-date' && c.dismissedAt !== undefined && (c.remoteUpdatedAt ?? 0) > c.localUpdatedAt + 86_400_000;
   const muted = c.mutedSources ?? [];
   // Sites turned off for everyone that have a page for this creator (ones turned off just here show in the checkboxes).
@@ -146,7 +147,10 @@ function CreatorDetails({ creator: c, app, adding, onAdding }: { creator: Creato
 
   return (
     <div className="creator-body">
-      {progress && (
+      {/* Only while something is happening, or when it failed. A finished update's message
+          stays in app.updates for the rest of the run, and "Already up to date with wicked.cc"
+          left under a row that still says "Update ready" reads as a contradiction. */}
+      {progress && (busy || progress.stage === 'error') && (
         <p className={`small ${progress.stage === 'error' ? 'error-text' : 'muted'}`} role="status">
           {progress.message}
         </p>

@@ -20,6 +20,15 @@ and versions follow [Semantic Versioning](https://semver.org/).
   site in your browser, add a password in your account settings, and use that here.
 - Sign-in pop-ups ("Continue with Google" and the like) open as real windows of the site's own session
   again, instead of being loaded over the page that opened them, which left that page waiting forever.
+- An opened creator no longer keeps the result of an update that has finished. "Already up to date with
+  wicked.cc" used to stay under a creator still marked *Update ready*, which read as a contradiction
+  even though both were true: your files match the page it downloaded from, and a different page of
+  that creator's is newer.
+- When the newer page is on the same site you just downloaded from, it's called "another wicked.cc
+  page" rather than "wicked.cc", which was pointing you back at the site you were already looking at.
+- "Already up to date" no longer promises that marking it as seen will hide the update when it
+  wouldn't. A creator whose newest page you don't have now says so, and its button hides that page
+  too, instead of leaving the creator on *Update ready* after you'd been told it was dealt with.
 
 ## [0.1.0] - 2026-09-16
 

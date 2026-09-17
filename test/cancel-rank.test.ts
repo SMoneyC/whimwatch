@@ -54,6 +54,22 @@ describe('source ranking', () => {
     expect(laterSourcesText(laterSources([ll, wcc, patreon], ll.listing.url), now)).toBe('Patreon (Sep 14) and wicked.cc (Sep 2) were updated later');
     expect(laterSources([ll, patreon], patreon.listing.url)).toEqual([]);
   });
+
+  it('calls a newer page of the same site another page of it, not the site itself', () => {
+    const now = Date.parse('2026-09-17T12:00:00Z');
+    // A creator with several wicked.cc pack pages: the one downloaded from, and a newer one.
+    const owned = remote('wickedcc', '2026-07-05T12:00:00Z');
+    const newerPack = remote('wickedcc', '2026-09-16T12:00:00Z');
+    const patreon = remote('patreon', '2026-09-10T12:00:00Z');
+
+    const later = laterSources([owned, newerPack, patreon], owned.listing.url);
+    // "wicked.cc was updated later" under "Nothing new on this wicked.cc page" says nothing.
+    expect(laterSourcesText(later, now, 'wickedcc')).toBe('another wicked.cc page (Sep 16) and Patreon (Sep 10) were updated later');
+    // A different site is still named as itself.
+    expect(laterSourcesText(laterSources([owned, patreon], owned.listing.url), now, 'wickedcc')).toBe('Patreon was updated later, on Sep 10');
+    // Without the source that was checked, nothing changes for anyone else.
+    expect(laterSourcesText(later, now)).toBe('wicked.cc (Sep 16) and Patreon (Sep 10) were updated later');
+  });
 });
 
 describe('cancellation', () => {

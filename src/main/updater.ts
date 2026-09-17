@@ -123,7 +123,7 @@ export class Updater {
               if (this.controller.statusOf(key) !== 'update-available') return `Already up to date: your files match ${label}`;
               const later = laterSources(this.target(key)?.remotes ?? [], plan.downloadUrl);
               return later.length
-                ? `Your files match ${label}. ${laterSourcesText(later)}, so open ${later.length === 1 ? 'it' : 'those'} to see what's new.`
+                ? `Your files match ${label}. ${laterSourcesText(later, undefined, plan.source)}, so open ${later.length === 1 ? 'it' : 'those'} to see what's new.`
                 : `Your files match ${label}, but another source looks newer. Open the creator's pages to see what's new.`;
             }
             if (!plan.files.length) throw new Error("The download doesn't contain any .package or .ts4script files.");
