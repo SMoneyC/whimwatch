@@ -41,7 +41,9 @@
     "scan:app": "electron-vite build && electron . --scan",
     "dist": "electron-vite build && electron-builder",
     "check-package": "tsx scripts/check-package.ts",
-    "dist:dir": "electron-vite build && electron-builder --dir"
+    "dist:dir": "electron-vite build && electron-builder --dir",
+    "release": "tsx scripts/release.ts",
+    "check-changes": "tsx scripts/release.ts --check"
   },
   "dependencies": {
     "7zip-bin": "5.2.0",

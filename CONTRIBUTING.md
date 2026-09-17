@@ -39,8 +39,9 @@ You don't need write access: work in your own fork.
    ```bash
    npm run lint && npm run typecheck && npm test
    ```
-   Add or update tests for what you changed, and note user-visible changes under `[Unreleased]` in
-   [CHANGELOG.md](CHANGELOG.md).
+   Add or update tests for what you changed. If someone using WhimWatch would notice the change, add a
+   note for it in [`changes/`](changes/README.md): one small file per change, so pull requests never
+   collide over the changelog. The release folds them into [CHANGELOG.md](CHANGELOG.md).
 5. **Push** the branch to your fork and open a **pull request against `main`**. Fill in the template and
    link the issue it addresses (`Fixes #123`).
 
