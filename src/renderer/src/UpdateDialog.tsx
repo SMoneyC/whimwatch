@@ -262,8 +262,10 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
             actions={
               newest &&
               (canGetNewest ? (
+                // Downloads it and compares, which is the only way to know whether there's anything
+                // in it the user doesn't already have. Saying so would be a guess.
                 <Button size="sm" icon={Download} onClick={() => chooseSource(newest.listing.url)} disabled={busy || installing}>
-                  Get that one
+                  See what's in it
                 </Button>
               ) : (
                 <Button size="sm" icon={ExternalLink} onClick={() => app.run(() => api.openExternal(newest.listing.url))}>
@@ -274,7 +276,7 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
           >
             <p>
               Newer: <strong>{newestName ?? `another ${newest ? SOURCE_LABEL[newest.listing.source] : ''} page`}</strong>
-              {newest?.updatedAt !== undefined && ` (${formatShortDate(newest.updatedAt)})`} — likely a pack you don't have.
+              {newest?.updatedAt !== undefined && ` (${formatShortDate(newest.updatedAt)})`}
             </p>
             {newest && (
               <p className="off-links">
