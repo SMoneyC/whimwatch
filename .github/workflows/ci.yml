@@ -30,6 +30,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      # A changelog note that can't be read would otherwise only show up at release time.
+      - run: npm run check-changes
 
   test:
     name: Tests (${{ matrix.os }})

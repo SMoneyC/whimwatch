@@ -8,4 +8,4 @@
 - [ ] If a site parser changed: updated the fixture in `test/fixtures/pages.ts` and ran `npm run smoke` (or `npm run smoke:app`)
 - [ ] No `.package`/`.ts4script` files, real mod files, adult content or personal paths are included
 - [ ] Any new dependency, font, icon or image has a licence that allows it (see `THIRD_PARTY_NOTICES.md`)
-- [ ] User-visible changes are noted under `[Unreleased]` in `CHANGELOG.md`
+- [ ] Anything people using WhimWatch would notice has a note in `changes/` (see `changes/README.md`)
