@@ -148,6 +148,9 @@ jobs:
     name: Draft the GitHub release
     needs: [verify, build, source]
     runs-on: ubuntu-latest
+    # Uploading the installers takes a couple of minutes when GitHub is well; the default six-hour
+    # limit only ever means a stalled upload burns the afternoon.
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:
@@ -192,7 +195,20 @@ jobs:
             echo "::error::$GITHUB_REF_NAME is already released. Bump the version instead of re-tagging."
             exit 1
           fi
+          # An upload that stalls otherwise hangs the job for hours: GitHub's asset endpoint has
+          # gone slow enough to sit on a single file for ten minutes with nothing transferred.
+          # Each attempt is capped and retried, which --clobber makes safe to repeat.
           for asset in assets/*; do
-            echo "Uploading $(basename "$asset")"
-            gh release upload "$GITHUB_REF_NAME" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
+            name=$(basename "$asset")
+            for attempt in 1 2 3; do
+              echo "Uploading $name (attempt $attempt)"
+              if timeout 600 gh release upload "$GITHUB_REF_NAME" "$asset" --clobber --repo "$GITHUB_REPOSITORY"; then
+                break
+              fi
+              if [ "$attempt" = 3 ]; then
+                echo "::error::Gave up uploading $name after 3 attempts."
+                exit 1
+              fi
+              sleep 15
+            done
           done
