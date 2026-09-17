@@ -18,5 +18,6 @@ changed for them, in a sentence. Several bullets in one file are fine when one
 change needs them. Changes nobody using the app would notice (refactors, test
 tidying, CI) don't need a note at all.
 
-Releasing folds every note here into a new `CHANGELOG.md` section and empties
-this folder — see `docs/maintainer/releasing.md`.
+A release (`npm run release -- <version>`) folds every note here into a new
+`CHANGELOG.md` section and empties this folder, so what's here is only ever what
+hasn't been released yet.
