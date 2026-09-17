@@ -238,7 +238,8 @@ Windows, FileVault on macOS, LUKS on Linux) and a password on your user account.
 - Replacement is by file name. If a creator renames a pack between versions, the old file stays unless you
   tick it under "Not in this download", so both may be installed.
 - Cloudflare sometimes asks for a human check. WhimWatch then shows a *Verify* button that opens the
-  site so you can complete it.
+  site so you can complete it. It leaves that site alone until you do, so the rest of the check isn't
+  held up; the window closes itself once you're through, and a check still running carries on.
 
 ## Development
 

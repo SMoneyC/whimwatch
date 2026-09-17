@@ -35,6 +35,7 @@ export function registerIpc(controller: AppController, updater: Updater, isTrust
     showFile: (path) => controller.showFile(path),
     listOtherFiles: () => controller.listOtherFiles(),
     showVerification: (site) => controller.showVerification(site),
+    dismissVerification: (site) => controller.dismissVerification(site),
     signIn: (site) => controller.signIn(site),
     signOut: (site) => controller.signOut(site),
     planUpdate: (key, listingUrl) => updater.plan(key, listingUrl),

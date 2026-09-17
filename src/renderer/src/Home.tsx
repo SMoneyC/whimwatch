@@ -1,5 +1,6 @@
 import { AlertTriangle, ArrowDownUp, ArrowUpCircle, Boxes, CheckCircle2, Download, Info, ShieldCheck } from 'lucide-react';
 import { type KeyboardEvent, useMemo, useRef, useState } from 'react';
+import type { BrowserSite } from '../../shared/api';
 import type { CreatorResult } from '../../shared/types';
 import { CreatorList, type Row } from './CreatorList';
 import { useConfirm } from './dialog';
@@ -55,6 +56,8 @@ export function Home({
   const running = snapshot.running;
   const [sort, setSort] = useState<SortOrder>('newest');
   const [showOther, setShowOther] = useState(false);
+  const verification = (state: 'needed' | 'passed'): BrowserSite[] =>
+    (Object.keys(app.verification) as BrowserSite[]).filter((site) => app.verification[site] === state);
 
   // Rows keep their last status while a check runs; results replace them as each creator finishes.
   const rows = useMemo<Row[]>(() => {
@@ -198,26 +201,42 @@ export function Home({
           </section>
         )}
 
-        {app.verificationNeeded.map((site) => (
+        {verification('needed').map((site) => (
           <Banner
             key={site}
             tone="warn"
             title={`${SOURCE_LABEL[site]} wants a quick human check`}
             onClose={() => app.clearVerification(site)}
             actions={
-              <Button
-                size="sm"
-                icon={ShieldCheck}
-                onClick={() => {
-                  app.clearVerification(site);
-                  void api.showVerification(site);
-                }}
-              >
+              // The banner stays until the check is passed (or the user closes it), so a window
+              // closed too early can be opened again.
+              <Button size="sm" icon={ShieldCheck} onClick={() => app.run(() => api.showVerification(site))}>
                 Verify
               </Button>
             }
           >
-            Complete it in the window that opens, close it, then check again.
+            Complete the check in the window that opens. It closes itself once you're through, and WhimWatch
+            {running ? ' carries on with that site.' : " picks that site up again when you check."}
+          </Banner>
+        ))}
+
+        {verification('passed').map((site) => (
+          <Banner
+            key={`passed-${site}`}
+            tone="ok"
+            title={`${SOURCE_LABEL[site]} check passed`}
+            onClose={() => app.clearVerification(site)}
+            actions={
+              running ? undefined : (
+                <Button size="sm" icon={ArrowUpCircle} onClick={() => app.run(() => api.startCheck())}>
+                  Check again
+                </Button>
+              )
+            }
+          >
+            {running
+              ? `Carrying on with ${SOURCE_LABEL[site]}.`
+              : `Check again to pick up the ${SOURCE_LABEL[site]} pages that were skipped.`}
           </Banner>
         ))}
 
