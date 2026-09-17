@@ -3,6 +3,24 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-09-17
+
+### Fixed
+
+- A Cloudflare check on Patreon or LoversLab no longer repeats page after page. WhimWatch leaves that
+  site alone until you've passed the check once, so the window you're working in isn't replaced by the
+  next creator's challenge, and the rest of the check finishes instead of waiting out a timeout per page.
+- The *Verify* window opens the site's own front page rather than the creator page the check stopped on,
+  closes itself once you're through, and a check that is still running carries on with that site.
+- Human checks that don't say "Just a moment" are recognized too, so a challenge is no longer read as a
+  creator page with nothing on it.
+- Signing in to Patreon with an account made through Google no longer dead-ends in silence. Google won't
+  sign anyone in from inside an app, and Patreon turns down the email box for such an account too, so
+  WhimWatch now says so as soon as a sign-in reaches Google and points at the way through: sign in to the
+  site in your browser, add a password in your account settings, and use that here.
+- Sign-in pop-ups ("Continue with Google" and the like) open as real windows of the site's own session
+  again, instead of being loaded over the page that opened them, which left that page waiting forever.
+
 ## [0.1.0] - 2026-09-16
 
 First public version.
