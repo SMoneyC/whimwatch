@@ -5,11 +5,13 @@
 <h1 align="center">WhimWatch</h1>
 
 <p align="center">
-  <strong>An always free, always open-source update checker and updater for the WickedWhims Sims 4 mod and its animation packs.</strong>
+  <strong>An always free, always open-source, always privacy-focused update checker and updater for the WickedWhims Sims 4 mod and its animation packs.</strong>
 </p>
 
 ## From the Author
-I'm forthewhimsy, and I'm a gamer and software dev who was sick of manually curating my WickedWhims animations, and finally did something about it.
+I'm forthewhimsy, and I'm a gamer and software dev who was sick of manually curating my WickedWhims animations.
+
+Then I remembered that - unlike my Sims - I actually have agency and I finally did something about it.
 
 Now I want to share that with the rest of the community so that we can all remove the chore of maintaining our library of WW packages, and focus on why we're all gathered here: FUN.
 
@@ -27,6 +29,8 @@ Worth noting, if you are new here:
 I want to also make this clear - While WhimWatch was built with LLM-assistance, I am a software dev who cares about the quality of what I put out and has the experience and desire to maintain a good product:
 
 I designed WhimWatch to be respectful of privacy, secure, easy-to-use, customizable, and simple to submit improvements and bug reports to.
+
+I encourage all users to be skeptical of any applications built by an anonymous stranger, especially when AI/LLMs are involved - To that end, I encourage users who are suspicious of the files here or anywhere to upload them to antivirus scanner sites like [VirusTotal](https://www.virustotal.com/gui/home/upload) if you want to have some form of confirmation that the files are safe (if you are not a programmer/don't feel like reading through the code yourself).
 
 I do my best to test the application as far as possible, but am limited by the packages and subscriptions I have available to me, so feedback from those on other operating systems, package sites, and other circumstances is vital to ensuring the app handles as many packages as seamlessly as possible:
 
