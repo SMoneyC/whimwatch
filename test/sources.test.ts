@@ -117,7 +117,13 @@ describe('LoversLab', () => {
 
   it('recognizes Cloudflare challenge pages', () => {
     expect(isChallengePage(pages.CHALLENGE)).toBe(true);
+    // Not every challenge says "Just a moment"; a challenge read as a real page checks out as nonsense.
+    expect(isChallengePage(pages.CHALLENGE_UNTITLED)).toBe(true);
     expect(isChallengePage(pages.LOVERSLAB_FILE)).toBe(false);
+    // Cloudflare puts its detection script on ordinary pages: reading that as a challenge would
+    // stop every check and ask the user to verify for nothing.
+    expect(isChallengePage(pages.PATREON_WITH_CF_SCRIPT)).toBe(false);
+    expect(isChallengePage(pages.PATREON_PAGE)).toBe(false);
   });
 });
 

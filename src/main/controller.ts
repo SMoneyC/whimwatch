@@ -97,6 +97,7 @@ export class AppController {
     controller.scanCache = await loadScanCache(controller.scanCachePath, statePath);
     controller.state = await loadState(statePath);
     controller.pool.onVerificationNeeded = (site) => controller.emit({ type: 'verification-needed', site });
+    controller.pool.onVerificationPassed = (site) => controller.emit({ type: 'verification-passed', site });
     controller.weakCookieStorage = weakCookieStorage();
     await controller.refreshAccounts();
     return controller;
@@ -292,6 +293,8 @@ export class AppController {
     this.progress = { phase: 'scan', done: 0, total: 0, message: 'Starting' };
     const abort = (this.checkAbort = new AbortController());
     this.checkMessage = undefined;
+    // A site that wanted a human check last time is worth trying again now.
+    this.pool.clearVerification();
     await this.commit();
     try {
       const fetcher = this.pool.fetcher();
@@ -816,6 +819,14 @@ export class AppController {
 
   async showFile(path: unknown): Promise<void> {
     await revealFile(str(path));
+  }
+
+  /**
+   * The banner was closed without the check being passed. The site is still held
+   * back, so say so again rather than letting the rest of the run fail quietly.
+   */
+  async dismissVerification(site: unknown): Promise<void> {
+    this.pool.remindVerification(browserSite(site));
   }
 
   async showVerification(site: unknown): Promise<void> {

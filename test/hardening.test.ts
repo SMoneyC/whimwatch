@@ -7,6 +7,7 @@ import { DownloadUnavailableError, fetchAllowed, fileNameFrom } from '../src/cor
 import { queueKey } from '../src/core/fetcher.js';
 import { chooseRemote } from '../src/core/source-choice.js';
 import { defaultState, SaveQueue, saveState, writeJsonAtomic } from '../src/core/store.js';
+import { VerificationGate } from '../src/main/verification.js';
 import type { RemoteInfo, SourceId } from '../src/shared/types.js';
 
 let tmp: string;
@@ -91,6 +92,41 @@ describe('request queue', () => {
     expect(queueKey('https://loverslab.com/files/file/1-x/')).toBe(queueKey('https://www.loverslab.com/files/file/2-y/'));
     expect(queueKey('https://www.patreon.com/api/posts')).toBe('patreon.com');
     expect(queueKey('https://files.wicked.cc/x.zip')).not.toBe(queueKey('https://wicked.cc/'));
+  });
+});
+
+describe('human checks', () => {
+  it('holds a site back until the check is passed, and tells the user once', () => {
+    const gate = new VerificationGate();
+    expect(gate.isArmed('patreon')).toBe(false);
+
+    // One check can hit the same challenge on dozens of pages; the user hears about it once.
+    expect(gate.arm('patreon')).toBe(true);
+    expect(gate.arm('patreon')).toBe(false);
+    expect(gate.isArmed('patreon')).toBe(true);
+    expect(gate.isArmed('loverslab')).toBe(false);
+
+    gate.clear('patreon');
+    expect(gate.isArmed('patreon')).toBe(false);
+    expect(gate.arm('patreon')).toBe(true);
+
+    gate.arm('loverslab');
+    gate.clear();
+    expect(gate.isArmed('patreon')).toBe(false);
+    expect(gate.isArmed('loverslab')).toBe(false);
+  });
+
+  it('says it again after the user waves the notice away without passing the check', () => {
+    const gate = new VerificationGate();
+    gate.arm('patreon');
+    expect(gate.arm('patreon')).toBe(false);
+
+    // Closing the banner doesn't let the site through; it just means saying so again, since every
+    // page of that site is still going nowhere.
+    gate.remind('patreon');
+    expect(gate.isArmed('patreon')).toBe(true);
+    expect(gate.arm('patreon')).toBe(true);
+    expect(gate.arm('patreon')).toBe(false);
   });
 });
 

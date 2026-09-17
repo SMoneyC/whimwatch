@@ -50,8 +50,16 @@ export class BrowserUnavailableError extends Error {
 export const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36';
 
+const CHALLENGE_TITLE = /<title>\s*(?:Just a moment\.\.\.|Attention Required! \| Cloudflare)\s*<\/title>/i;
+/**
+ * Markers Cloudflare only puts on the challenge itself. The script it adds to
+ * ordinary pages (/cdn-cgi/challenge-platform/…/jsd) is deliberately not one of
+ * them: Patreon serves that on every page, challenge or not.
+ */
+const CHALLENGE_MARKER = /window\._cf_chl_opt|id="challenge-(?:form|error-title)"|cf-challenge-running|cf-browser-verification/i;
+
 export function isChallengePage(html: string): boolean {
-  return /<title>\s*(?:Just a moment\.\.\.|Attention Required! \| Cloudflare)\s*<\/title>/i.test(html);
+  return CHALLENGE_TITLE.test(html) || CHALLENGE_MARKER.test(html);
 }
 
 /**
@@ -75,10 +83,16 @@ export class HostQueue {
     const generation = this.generation;
     const next = prev.then(async () => {
       if (generation !== this.generation) throw new CancelledError();
+      let asked = true;
       try {
         return await task();
+      } catch (err) {
+        // Cancelled, or the site is waiting for a human check: nothing was asked of it, so
+        // there's nothing to be polite about, and the rest of a check shouldn't wait for it.
+        asked = !(err instanceof CancelledError || err instanceof VerificationRequiredError);
+        throw err;
       } finally {
-        await new Promise((r) => setTimeout(r, gap));
+        if (asked) await new Promise((r) => setTimeout(r, gap));
       }
     });
     this.tails.set(host, next.catch(() => undefined));

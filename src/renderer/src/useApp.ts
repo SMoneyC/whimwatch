@@ -9,7 +9,8 @@ export interface AppModel {
   progress?: CheckProgress;
   /** Creators finished during the running check, by key. */
   live: Record<string, CreatorResult>;
-  verificationNeeded: BrowserSite[];
+  /** Sites asking for a human check, and ones the user has just passed, until the next check. */
+  verification: Partial<Record<BrowserSite, 'needed' | 'passed'>>;
   updates: Record<string, UpdateProgress>;
   batch?: BatchState;
   error?: string;
@@ -18,11 +19,13 @@ export interface AppModel {
   clearVerification(site: BrowserSite): void;
 }
 
+export type VerificationState = AppModel['verification'];
+
 export function useApp(): AppModel {
   const [snapshot, setSnapshot] = useState<AppSnapshot>();
   const [progress, setProgress] = useState<CheckProgress>();
   const [live, setLive] = useState<Record<string, CreatorResult>>({});
-  const [verificationNeeded, setVerificationNeeded] = useState<BrowserSite[]>([]);
+  const [verification, setVerification] = useState<VerificationState>({});
   const [updates, setUpdates] = useState<Record<string, UpdateProgress>>({});
   const [batch, setBatch] = useState<BatchState>();
   const [error, setError] = useState<string>();
@@ -44,13 +47,20 @@ export function useApp(): AppModel {
           break;
         case 'progress':
           setProgress(event.progress);
-          if (event.progress.phase === 'scan' && event.progress.done === 0) setLive({});
+          if (event.progress.phase === 'scan' && event.progress.done === 0) {
+            setLive({});
+            // A new check tries the sites again, so last check's verification notes are done with.
+            setVerification({});
+          }
           break;
         case 'creator':
           setLive((prev) => ({ ...prev, [event.creator.key]: event.creator }));
           break;
         case 'verification-needed':
-          setVerificationNeeded((prev) => (prev.includes(event.site) ? prev : [...prev, event.site]));
+          setVerification((prev) => ({ ...prev, [event.site]: 'needed' }));
+          break;
+        case 'verification-passed':
+          setVerification((prev) => ({ ...prev, [event.site]: 'passed' }));
           break;
         case 'update-progress':
           setUpdates((prev) => ({ ...prev, [event.progress.creatorKey]: event.progress }));
@@ -77,8 +87,15 @@ export function useApp(): AppModel {
   }, []);
 
   const clearVerification = useCallback((site: BrowserSite) => {
-    setVerificationNeeded((prev) => prev.filter((s) => s !== site));
+    setVerification((prev) => {
+      // Waving away a site still waiting for its check: it stays held back either way, so let the
+      // main process say so again the next time a page of that site is turned away.
+      if (prev[site] === 'needed') void api.dismissVerification(site);
+      const next = { ...prev };
+      delete next[site];
+      return next;
+    });
   }, []);
 
-  return { snapshot, progress, live, verificationNeeded, updates, batch, error, setError, run, clearVerification };
+  return { snapshot, progress, live, verification, updates, batch, error, setError, run, clearVerification };
 }

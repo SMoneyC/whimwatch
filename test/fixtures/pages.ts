@@ -73,6 +73,15 @@ export const LOVERSLAB_FILE = `<!doctype html><html><head>
 
 export const CHALLENGE = `<!DOCTYPE html><html><head><title>Just a moment...</title></head><body>Checking your browser</body></html>`;
 
+/** The interstitial Cloudflare serves under the site's own title, so only its markup gives it away. */
+export const CHALLENGE_UNTITLED = `<!DOCTYPE html><html lang="en-US"><head><title>www.patreon.com</title></head><body class="no-js">
+<div id="cf-wrapper"><div id="challenge-form" class="challenge-form"><div id="cf-please-wait"></div></div></div>
+<script>window._cf_chl_opt={cvId:'3',cType:'managed',cRay:'a3c3ec2ecb696417'};</script></body></html>`;
+
+/** Cloudflare adds its detection script to ordinary pages too; that alone is not a challenge. */
+export const PATREON_WITH_CF_SCRIPT = `<!doctype html><html><head><title>LAMABOY | Patreon</title></head><body>
+<script src="/cdn-cgi/challenge-platform/h/b/scripts/jsd/main.js"></script><h1>Posts</h1></body></html>`;
+
 export const PATREON_PAGE = `<!doctype html><html><body><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"bootstrapEnvelope":{"pageBootstrap":{"campaign":{"data":{"id":"10577235","type":"campaign"}}}}}}}</script></body></html>`;
 
 export const PATREON_POSTS = JSON.stringify({

@@ -156,6 +156,8 @@ export type AppEvent =
   | { type: 'progress'; progress: CheckProgress }
   | { type: 'creator'; creator: CreatorResult }
   | { type: 'verification-needed'; site: BrowserSite }
+  /** The user passed the site's human check, so it can be checked again. */
+  | { type: 'verification-passed'; site: BrowserSite }
   | { type: 'update-progress'; progress: UpdateProgress }
   | { type: 'batch'; batch: BatchState }
   | { type: 'error'; message: string }
@@ -206,6 +208,8 @@ export interface WhimWatchApi {
   /** Files that aren't WickedWhims creator packages (not included in snapshots, which stay small). */
   listOtherFiles(): Promise<OtherFile[]>;
   showVerification(site: BrowserSite): Promise<void>;
+  /** The user waved the notice away without passing the check: say it again when the site is next turned away. */
+  dismissVerification(site: BrowserSite): Promise<void>;
   signIn(site: BrowserSite): Promise<AccountStatus>;
   signOut(site: BrowserSite): Promise<AccountStatus>;
   /** Downloads and prepares an update; `listingUrl` picks the source (default: newest downloadable). */
@@ -273,6 +277,7 @@ export const API_METHODS = [
   'showFile',
   'listOtherFiles',
   'showVerification',
+  'dismissVerification',
   'signIn',
   'signOut',
   'planUpdate',

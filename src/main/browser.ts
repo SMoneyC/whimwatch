@@ -12,6 +12,7 @@ import {
 import type { BrowserSite } from '../shared/api.js';
 import { allowHiddenRequest, SITE_DOMAINS } from './request-filter.js';
 import { SiteSessionMode } from './session-mode.js';
+import { SiteAccess, type SiteBrowser } from './site-access.js';
 
 export type { BrowserSite };
 
@@ -32,9 +33,19 @@ export const SITES: Record<BrowserSite, { label: string; origin: string; loginUr
 
 const CHALLENGE_TIMEOUT_MS = 25_000;
 const LOAD_TIMEOUT_MS = 45_000;
+/** How often the open verification window is looked at to see whether the check has passed. */
+const VERIFICATION_POLL_MS = 1000;
+/** How long to keep looking, so a window left open all day doesn't poll all day. */
+const VERIFICATION_WATCH_MS = 10 * 60 * 1000;
 
 export function siteForUrl(url: string): BrowserSite | undefined {
-  const host = new URL(url).hostname;
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    // A window that failed to load has no address worth the name.
+    return undefined;
+  }
   if (host.endsWith('loverslab.com')) return 'loverslab';
   if (host.endsWith('patreon.com')) return 'patreon';
   return undefined;
@@ -115,22 +126,57 @@ export function denyPermissions(ses: Session): void {
  * One hidden window per site, reused for every request so Cloudflare clearance
  * and sign-in cookies carry over. Requests are serialized per site by the queue.
  */
-export class BrowserPool {
+export class BrowserPool implements SiteBrowser {
   private windows = new Map<BrowserSite, BrowserWindow>();
-  private queue = new HostQueue(politeGap);
-  private http = createNodeFetcher(this.queue);
+  private http = createNodeFetcher(new HostQueue(politeGap));
   private disposing = false;
   private filteredSessions = new WeakSet<Session>();
+  /** Whose turn it is, and which sites are waiting for a human check. Testable without a browser. */
+  private access = new SiteAccess(this, { onVerificationNeeded: (site) => this.onVerificationNeeded?.(site) });
+  /** Sites whose window is open for the user to pass a check in, with what it takes to stop watching. */
+  private watchers = new Map<
+    BrowserSite,
+    {
+      timer: NodeJS.Timeout;
+      win: BrowserWindow;
+      onClose: () => void;
+      onStart: (details: { isMainFrame: boolean }) => void;
+      onFail: (event: unknown, code: number, description: string, url: string, isMainFrame: boolean) => void;
+    }
+  >();
   /** Called when a site needs the user to complete a challenge. */
   onVerificationNeeded?: (site: BrowserSite) => void;
+  /** Called once the user has passed it and the site can be used again. */
+  onVerificationPassed?: (site: BrowserSite) => void;
 
   fetcher(): Fetcher {
-    return {
-      get: this.http.get,
-      head: this.http.head,
-      browserGet: (url) => this.queue.run(url, () => this.load(url)),
-      browserFetch: (pageUrl, apiUrl) => this.queue.run(apiUrl, () => this.fetchInPage(pageUrl, apiUrl)),
-    };
+    return this.access.fetcher(this.http, siteForUrl);
+  }
+
+  /** What a page of this site is called when something has to be said about it. */
+  label(site: BrowserSite): string {
+    return SITES[site].label;
+  }
+
+  /** Whether the site's window is on screen, i.e. the user is working in it. */
+  onScreen(site: BrowserSite): boolean {
+    const win = this.windows.get(site);
+    return Boolean(win && !win.isDestroyed() && win.isVisible());
+  }
+
+  /**
+   * Lets the sites be tried again, e.g. when the user starts a new check. A site
+   * whose window is open for the user to work in keeps its hold: the check they
+   * started is why it's on screen.
+   */
+  clearVerification(site?: BrowserSite): void {
+    const sites = site ? [site] : [...ALL_SITES];
+    for (const s of sites) if (!this.watchers.has(s)) this.access.clearVerification(s);
+  }
+
+  /** Says it again next time the site is held back, after the user waved the notice away. */
+  remindVerification(site: BrowserSite): void {
+    this.access.remindVerification(site);
   }
 
   window(site: BrowserSite): BrowserWindow {
@@ -181,40 +227,119 @@ export class BrowserPool {
     });
   }
 
-  /** Reveals the site's window so the user can pass a challenge by hand. */
-  showVerification(site: BrowserSite, url = SITES[site].origin): void {
+  /**
+   * Reveals the site's window so the user can pass a challenge by hand. It
+   * starts on the site's own front page, not the creator page the check stopped
+   * on: passing clears the whole site, and a creator's page has no business
+   * being put on screen.
+   */
+  showVerification(site: BrowserSite): void {
     const win = this.window(site);
     win.show();
     win.focus();
-    // Load (or reload) now that it's visible, so images and challenge widgets aren't skipped.
-    if (win.webContents.getURL()) win.webContents.reload();
-    else void win.loadURL(url);
+    // Now that it's visible, images and challenge widgets aren't skipped.
+    void win.loadURL(SITES[site].origin).catch(() => undefined);
+    this.watchVerification(site, win);
+  }
+
+  /**
+   * Watches the open window until the challenge is gone, then puts the window
+   * away and lets the site be used again. A check that is still running carries
+   * on with that site by itself.
+   *
+   * Watching ends when the user closes the window, not when it stops being
+   * visible: minimizing it is not giving up, and what isVisible() makes of a
+   * minimized window differs by platform.
+   */
+  private watchVerification(site: BrowserSite, win: BrowserWindow): void {
+    this.stopWatching(site);
+    const wc = win.webContents;
+    // Closed without passing: the next check the user starts tries the site again.
+    const onClose = (): void => this.stopWatching(site);
+    // Chromium's own error page keeps the address it failed to reach and holds no challenge, so
+    // without this it reads as a page of the site with nothing wrong: passed. It isn't.
+    let failed = false;
+    const onStart = (details: { isMainFrame: boolean }): void => {
+      if (details.isMainFrame) failed = false;
+    };
+    const onFail = (_e: unknown, code: number, _desc: string, _url: string, isMainFrame: boolean): void => {
+      // -3 (ERR_ABORTED): superseded by another navigation, e.g. a challenge passing.
+      if (isMainFrame && code !== -3) failed = true;
+    };
+    win.on('close', onClose);
+    wc.on('did-start-navigation', onStart);
+    wc.on('did-fail-load', onFail);
+    const deadline = Date.now() + VERIFICATION_WATCH_MS;
+    const timer = setInterval(() => {
+      if (win.isDestroyed() || Date.now() > deadline) {
+        this.stopWatching(site);
+        return;
+      }
+      if (failed) return;
+      void pageState(wc).then(
+        (page) => {
+          if (win.isDestroyed() || !this.watchers.has(site) || failed) return;
+          // A page of the site, parsed, with no challenge on it. Anything else — a challenge
+          // still running, a page from somewhere else — is not proof of passing.
+          if (page.loading || isChallengePage(page.html) || siteForUrl(wc.getURL()) !== site) return;
+          this.stopWatching(site);
+          this.access.clearVerification(site);
+          win.hide();
+          this.onVerificationPassed?.(site);
+        },
+        () => undefined,
+      );
+    }, VERIFICATION_POLL_MS);
+    this.watchers.set(site, { timer, win, onClose, onStart, onFail });
+  }
+
+  private stopWatching(site: BrowserSite): void {
+    const watcher = this.watchers.get(site);
+    if (!watcher) return;
+    clearInterval(watcher.timer);
+    if (!watcher.win.isDestroyed()) {
+      watcher.win.off('close', watcher.onClose);
+      watcher.win.webContents.off('did-start-navigation', watcher.onStart);
+      watcher.win.webContents.off('did-fail-load', watcher.onFail);
+    }
+    this.watchers.delete(site);
   }
 
   dispose(): void {
     this.disposing = true;
+    for (const site of [...this.watchers.keys()]) this.stopWatching(site);
     for (const win of this.windows.values()) if (!win.isDestroyed()) win.destroy();
     this.windows.clear();
   }
 
   /** Cancels queued requests and closes the hidden windows so in-flight page loads stop now. */
   cancelAll(): void {
-    this.queue.cancelPending();
+    this.access.cancelPending();
     for (const site of [...this.windows.keys()]) {
       if (!this.windows.get(site)?.isVisible()) this.reset(site);
     }
   }
 
-  /** Drops the hidden window so the next request starts from fresh cookies (after sign-out). */
+  /**
+   * Drops the hidden window so the next request starts from fresh cookies (after
+   * sign-out, or when a check is cancelled). The site starts over in every
+   * sense, so any hold on it goes too: otherwise cancelling a check left the
+   * site held back with nothing on screen to act on.
+   */
   reset(site: BrowserSite): void {
     const win = this.windows.get(site);
     this.windows.delete(site);
+    this.stopWatching(site);
+    this.access.clearVerification(site);
     if (win && !win.isDestroyed()) win.destroy();
   }
 
-  private async load(url: string): Promise<HttpResponse> {
-    const site = siteForUrl(url);
-    if (!site) throw new Error(`No browser session for ${url}`);
+  /**
+   * Loads the page in the site's window and returns it once parsed. Whether it
+   * should be loaded at all was decided before this was called (see SiteAccess);
+   * a challenge that outlasts its welcome is reported as one there too.
+   */
+  async loadPage(site: BrowserSite, url: string): Promise<HttpResponse> {
     const win = this.window(site);
     const wc = win.webContents;
 
@@ -233,15 +358,13 @@ export class BrowserPool {
         await sleep(1000);
         page = await pageState(wc);
       }
-      if (isChallengePage(page.html)) {
-        wc.stop();
-        this.onVerificationNeeded?.(site);
-        throw new VerificationRequiredError(SITES[site].label);
-      }
-      if (page.loading) {
+      // Still a challenge after all that waiting: stop, and let SiteAccess make it a
+      // VerificationRequiredError and hold the site back.
+      if (page.loading && !isChallengePage(page.html)) {
         wc.stop();
         throw new Error(`Timed out loading ${url}`);
       }
+      if (isChallengePage(page.html)) wc.stop();
       return { status: status || 200, url: wc.getURL(), body: page.html, headers: {} };
     } finally {
       wc.off('did-navigate', onNavigate);
@@ -250,7 +373,7 @@ export class BrowserPool {
 
   /** Runs a script in a page of the site (loading `pageUrl` first if needed), queued like other requests. */
   runInPage<T>(pageUrl: string, script: string): Promise<T> {
-    return this.queue.run(pageUrl, () => this.evaluate<T>(pageUrl, script));
+    return this.access.runInPage<T>(siteForUrl(pageUrl), pageUrl, script);
   }
 
   /**
@@ -269,20 +392,22 @@ export class BrowserPool {
     );
   }
 
-  private async evaluate<T>(pageUrl: string, script: string): Promise<T> {
-    const site = siteForUrl(pageUrl);
-    if (!site) throw new Error(`No browser session for ${pageUrl}`);
+  /**
+   * Runs a script in a page of the site, loading it first if the window is
+   * elsewhere. Whether the site may be touched at all was decided in SiteAccess,
+   * including for the load this may need.
+   */
+  async runScript<T>(site: BrowserSite, pageUrl: string, script: string): Promise<T> {
     const win = this.window(site);
-    if (!win.webContents.getURL().startsWith(new URL(pageUrl).origin)) await this.load(pageUrl);
+    if (!win.webContents.getURL().startsWith(new URL(pageUrl).origin)) {
+      const page = await this.loadPage(site, pageUrl);
+      // The page it landed on is a challenge: nothing run in it would mean anything.
+      if (isChallengePage(page.body)) {
+        this.access.requestVerification(site);
+        throw new VerificationRequiredError(SITES[site].label);
+      }
+    }
     return (await win.webContents.executeJavaScript(script, true)) as T;
-  }
-
-  private fetchInPage(pageUrl: string, apiUrl: string): Promise<{ status: number; body: string }> {
-    return this.evaluate(
-      pageUrl,
-      `fetch(${JSON.stringify(apiUrl)}, { credentials: 'include', headers: { Accept: 'application/vnd.api+json' } })
-        .then(async (r) => ({ status: r.status, body: await r.text() }))`,
-    );
   }
 }
 
