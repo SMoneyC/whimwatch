@@ -20,6 +20,7 @@ import {
 } from '../src/main/privacy.js';
 import { allowHiddenRequest, SITE_DOMAINS } from '../src/main/request-filter.js';
 import { SiteSessionMode } from '../src/main/session-mode.js';
+import { isRejectionTitle, isSignInRejection, PASSWORD_HELP, PASSWORD_PATH, signInProvider } from '../src/main/sign-in-provider.js';
 import { gameWarnings } from '../src/shared/game.js';
 import { privacyLevel, privacyLevelPatch } from '../src/shared/privacy.js';
 import type { RemoteInfo } from '../src/shared/types.js';
@@ -162,6 +163,50 @@ describe('site sessions', () => {
     };
     expect(await removeThirdPartyCookies(ses, SITE_DOMAINS.loverslab)).toBe(3);
     expect(removed).toEqual(['_ga http://google-analytics.com/', 'ad https://ads.example.net/x', 'trick https://loverslab.com.evil.test/']);
+  });
+});
+
+describe('signing in through another service', () => {
+  it('knows which service a sign-in page handed over to', () => {
+    expect(signInProvider('https://accounts.google.com/o/oauth2/auth?client_id=x')).toBe('Google');
+    expect(signInProvider('https://appleid.apple.com/auth/authorize?client_id=x')).toBe('Apple');
+    expect(signInProvider('https://www.facebook.com/v19.0/dialog/oauth?client_id=x')).toBe('Facebook');
+    expect(signInProvider('https://www.patreon.com/login')).toBeUndefined();
+    // Not a Google address, whatever it puts in the host name.
+    expect(signInProvider('https://accounts.google.com.evil.test/signin')).toBeUndefined();
+    expect(signInProvider('not a url')).toBeUndefined();
+  });
+
+  it("recognizes Google's page for refusing to sign in inside an app", () => {
+    expect(isSignInRejection('https://accounts.google.com/v3/signin/rejected?rejectReason=DISALLOWED_USERAGENT&dsh=1')).toBe(true);
+    expect(isSignInRejection('https://accounts.google.com/signin/rejected?rrk=1')).toBe(true);
+    expect(isSignInRejection('https://accounts.google.com/o/oauth2/auth/error?error=disallowed_useragent')).toBe(true);
+    // The refusal also arrives as an error on the address Google sends the user back to, which is
+    // the site's own, not Google's — in the query, or in the fragment for flows that use one.
+    expect(isSignInRejection('https://www.patreon.com/auth/google?error=disallowed_useragent')).toBe(true);
+    expect(isSignInRejection('https://www.patreon.com/auth/google#error=disallowed_useragent&state=x')).toBe(true);
+    // The sign-in page itself is not a refusal: it may still go through.
+    expect(isSignInRejection('https://accounts.google.com/v3/signin/identifier?flowName=GlifWebSignIn')).toBe(false);
+    expect(isSignInRejection('https://www.patreon.com/login?rejected=1')).toBe(false);
+    // A page that merely mentions it is not one: only the parameters that carry a refusal count.
+    expect(isSignInRejection('https://www.patreon.com/login?next=%2Fhelp%2Fdisallowed_useragent')).toBe(false);
+    expect(isSignInRejection('https://www.patreon.com/posts/disallowed_useragent-123')).toBe(false);
+    expect(isSignInRejection('not a url')).toBe(false);
+  });
+
+  it('recognizes the same page by its heading, for addresses that say nothing', () => {
+    expect(isRejectionTitle("Couldn't sign you in")).toBe(true);
+    expect(isRejectionTitle('Couldn’t sign you in')).toBe(true);
+    expect(isRejectionTitle('Sign in - Google Accounts')).toBe(false);
+    expect(isRejectionTitle('Log in or sign up | Patreon')).toBe(false);
+  });
+
+  it('points at the site itself, not at the service that refused', () => {
+    expect(PASSWORD_HELP.patreon).toMatch(/^https:\/\/www\.patreon\.com\//);
+    expect(signInProvider(PASSWORD_HELP.patreon ?? '')).toBeUndefined();
+    // Named so nobody has to hunt: an account made through Google has no password, and this is
+    // where Patreon offers to set one.
+    expect(PASSWORD_PATH.patreon).toContain('Set Password');
   });
 });
 

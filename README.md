@@ -239,6 +239,16 @@ Windows, FileVault on macOS, LUKS on Linux) and a password on your user account.
   tick it under "Not in this download", so both may be installed.
 - Cloudflare sometimes asks for a human check. WhimWatch then shows a *Verify* button that opens the
   site so you can complete it.
+- **An account made with Google needs a password before you can sign in here.** Google won't sign
+  anyone in from inside another app (it shows "This browser or app may not be secure"), so *Continue
+  with Google* can't finish in the sign-in window, and nothing WhimWatch does can change that. For an
+  account made with Google, Patreon turns the email box down as well ("Log in with your Google
+  account"). The way through: open [Patreon](https://www.patreon.com/login) in your browser, sign in
+  with Google there, and set a password under **Settings → Account → Login → Set Password**, then sign
+  in here with your email and that password. The password is an extra way in, not a swap: Google still
+  signs you in everywhere else. WhimWatch never sees it; it only keeps the login cookie the site sets. Accounts that already have a password, or that sign in with an emailed code, work in the
+  sign-in window as they are — and checking for Patreon updates needs no account at all, only
+  downloading does.
 
 ## Development
 

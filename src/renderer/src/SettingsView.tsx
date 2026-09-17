@@ -436,6 +436,13 @@ function Accounts({ snapshot, app, onPrivacy }: { snapshot: AppSnapshot; app: Ap
         downloads may go against a site's terms and could get an account flagged, so WhimWatch only downloads when you ask, one file at a
         time.
       </Banner>
+      <Banner tone="info" title="Accounts made with Google need a password first">
+        Google won't sign you in from inside another app, so “Continue with Google” can't finish here — and for an account made that way,
+        Patreon turns the email box down too (“Log in with your Google account”). Sign in to Patreon in your browser and set a password
+        under Settings → Account → Login, then use your email and that password here. It's an extra way in, not a swap: Google still signs
+        you in everywhere else. Accounts that already have a password, or that sign in with an emailed code, work in the sign-in window as
+        they are.
+      </Banner>
     </>
   );
 }
