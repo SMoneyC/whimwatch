@@ -184,10 +184,9 @@ export function Home({
               <Info size={20} aria-hidden="true" />
             </span>
             <div className="first-check-copy">
-              <h2 id="first-check-title">First check done. Most of these probably aren't real updates.</h2>
+              <h2 id="first-check-title">First check done. What's left below may not be real updates.</h2>
               <p className="muted">
-                WhimWatch compares each download page's date with your file dates, so packs you installed yourself look older than they
-                are. If you're fairly sure you're current, mark them all as seen. Anything released after today still shows up.
+                WhimWatch compares each download page's date with your file dates, so packs you installed yourself might look older than they actually are. If you're fairly sure you're current, mark them all as seen. Anything released after today will still surface as an update.
               </p>
             </div>
             <div className="first-check-actions">

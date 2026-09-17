@@ -66,6 +66,12 @@ export function fileName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
 }
 
+/** Page names run long ("… REMAKE ~UNDRESSABLE ✦ 2026"); whole characters, so emoji aren't split. */
+export function shortTitle(title: string, max = 34): string {
+  const chars = [...title.trim()];
+  return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : title.trim();
+}
+
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   const units = ['KB', 'MB', 'GB', 'TB'];

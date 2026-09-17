@@ -22,13 +22,20 @@ and versions follow [Semantic Versioning](https://semver.org/).
   again, instead of being loaded over the page that opened them, which left that page waiting forever.
 - An opened creator no longer keeps the result of an update that has finished. "Already up to date with
   wicked.cc" used to stay under a creator still marked *Update ready*, which read as a contradiction
-  even though both were true: your files match the page it downloaded from, and a different page of
-  that creator's is newer.
+  even though both were true: your files match what that page offers, and the page is still dated
+  later than your files.
 - When the newer page is on the same site you just downloaded from, it's called "another wicked.cc
   page" rather than "wicked.cc", which was pointing you back at the site you were already looking at.
-- "Already up to date" no longer promises that marking it as seen will hide the update when it
-  wouldn't. A creator whose newest page you don't have now says so, and its button hides that page
-  too, instead of leaving the creator on *Update ready* after you'd been told it was dealt with.
+- An update with nothing to install now gives you the verdict rather than the arithmetic: "Nothing to
+  install — you already have this. The download here is identical to your files, so there's no update
+  after all." It used to compare the page's date with your files' dates and leave you to work out
+  whether you were missing something.
+- When a *different* page of that creator's is the newer one, it's named, with buttons to download
+  that one instead, open it, or drop it from the creator so it stops counting — and marking as seen
+  hides that page too, rather than saying it's dealt with and leaving *Update ready* in place.
+- *Download from* names each page, not the site it's on. A creator with a dozen wicked.cc pages used
+  to offer a dozen choices all called "wicked.cc", with only the date to tell them apart. Page names
+  stay hidden when "Hide page titles" is on.
 
 ## [0.1.0] - 2026-09-16
 

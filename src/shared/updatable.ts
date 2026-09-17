@@ -33,6 +33,19 @@ export function sameDay(a: RemoteInfo, b: RemoteInfo): boolean {
 }
 
 /**
+ * The page a creator's "there's something new" comes from: their newest checked page. With one page
+ * per pack, this is usually the pack that's new, which may well be one the user doesn't have.
+ */
+export function newestPage(remotes: RemoteInfo[]): RemoteInfo | undefined {
+  let newest: RemoteInfo | undefined;
+  for (const r of remotes) {
+    if (r.status !== 'ok' || r.updatedAt === undefined) continue;
+    if (!newest || r.updatedAt > (newest.updatedAt ?? 0)) newest = r;
+  }
+  return newest;
+}
+
+/**
  * Sites updated more than a day after the listing at `listingUrl`, newest first, one entry per site.
  * When that listing's download matches the installed files, these are why the creator still shows
  * an update.

@@ -34,6 +34,8 @@ export function downloadableRemote(remotes: RemoteInfo[], snapshot: AppSnapshot)
 export interface DownloadOption {
   url: string;
   label: string;
+  /** The page's own name, when the site gives one and page titles aren't hidden. */
+  title?: string;
   updatedAt?: number;
   version?: string;
   fileCount?: number;
@@ -51,6 +53,8 @@ export function downloadOptions(key: string, snapshot: AppSnapshot): DownloadOpt
   return (creator ? updatableRemotes(creator.remotes, signedInCheck(snapshot)) : []).map((r) => ({
     url: r.listing.url,
     label: SOURCE_LABEL[r.listing.source],
+    // A creator can have a dozen pages on one site, where "wicked.cc" twelve times tells you nothing.
+    title: snapshot.settings.hidePageTitles ? undefined : r.title,
     updatedAt: r.updatedAt,
     version: r.version,
     fileCount: r.fileCount,

@@ -7,7 +7,7 @@ import { runCheck } from '../src/core/check.js';
 import { CancelledError, HostQueue } from '../src/core/fetcher.js';
 import { SNIPPET_TUNING_TYPE } from '../src/core/scanner.js';
 import type { RemoteInfo, SourceId } from '../src/shared/types.js';
-import { laterSources, laterSourcesText, rankRemotes, updatableRemotes } from '../src/shared/updatable.js';
+import { laterSources, laterSourcesText, newestPage, rankRemotes, updatableRemotes } from '../src/shared/updatable.js';
 import { buildDbpf, wwTuningXml } from './helpers/dbpf-builder.js';
 
 const remote = (source: SourceId, updatedAt: string, extra: Partial<RemoteInfo> = {}): RemoteInfo => ({
@@ -53,6 +53,17 @@ describe('source ranking', () => {
     const wcc = remote('wickedcc', '2026-09-02T12:00:00Z');
     expect(laterSourcesText(laterSources([ll, wcc, patreon], ll.listing.url), now)).toBe('Patreon (Sep 14) and wicked.cc (Sep 2) were updated later');
     expect(laterSources([ll, patreon], patreon.listing.url)).toEqual([]);
+  });
+
+  it('names the page an update comes from, skipping ones that failed to check', () => {
+    const owned = remote('wickedcc', '2026-07-05T12:00:00Z', { title: 'Slipping Underwear' });
+    const newest = remote('wickedcc', '2026-09-16T12:00:00Z', { title: 'Cassius Lace Lingerie' });
+    const broken = remote('wickedcc', '2026-09-20T12:00:00Z', { status: 'error' });
+    const undated = remote('patreon', '2026-09-18T12:00:00Z', { updatedAt: undefined });
+
+    expect(newestPage([owned, newest, broken, undated])?.title).toBe('Cassius Lace Lingerie');
+    expect(newestPage([])).toBeUndefined();
+    expect(newestPage([broken, undated])).toBeUndefined();
   });
 
   it('calls a newer page of the same site another page of it, not the site itself', () => {

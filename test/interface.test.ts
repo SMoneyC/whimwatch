@@ -3,7 +3,7 @@ import { runBatch } from '../src/core/batch.js';
 import type { AppSnapshot } from '../src/shared/api.js';
 import type { CoreResult, CreatorResult, InstallRecord, RemoteInfo, SeenEvent } from '../src/shared/types.js';
 import { rowAction, rowStatus, rowSummary, sortCreators, updateCandidates } from '../src/renderer/src/eligibility.js';
-import { acceleratorFromKey, acceleratorKeys, formatCount, plural, timeAgo } from '../src/renderer/src/format.js';
+import { acceleratorFromKey, acceleratorKeys, formatCount, plural, shortTitle, timeAgo } from '../src/renderer/src/format.js';
 import { gameHealth } from '../src/renderer/src/health.js';
 import { dayLabel, fileCounts, historyItems, isUndone, matchesFilter } from '../src/renderer/src/history.js';
 
@@ -157,6 +157,15 @@ describe('wording and shortcuts', () => {
     expect(formatCount(3812)).toBe('3,812');
     expect(plural(1, 'file')).toBe('1 file');
     expect(plural(2, 'match', 'matches')).toBe('2 matches');
+  });
+
+  it('shortens a long page name without cutting a character in half', () => {
+    expect(shortTitle('Gelato Set')).toBe('Gelato Set');
+    expect(shortTitle('  Celestia Dress ~UNDRESSABLE  ')).toBe('Celestia Dress ~UNDRESSABLE');
+    // 33 characters and the ellipsis: the cap counts what's shown.
+    expect(shortTitle('Cassius Lace Lingerie REMAKE ~UNDRESSABLE')).toBe('Cassius Lace Lingerie REMAKE ~UND…');
+    // Emoji are whole characters, not two halves of one.
+    expect(shortTitle('Eve V10.2 ✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦', 12)).toBe('Eve V10.2 ✦…');
   });
 
   it('turns key presses into shortcuts, and refuses ones that would block typing', () => {

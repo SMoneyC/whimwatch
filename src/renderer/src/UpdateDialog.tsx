@@ -1,12 +1,12 @@
-import { ArrowRightLeft, BellOff, CheckCircle2, Download, ExternalLink, FolderOpen, Gamepad2, Info, Minus, Plus, ShieldCheck } from 'lucide-react';
+import { ArrowRightLeft, BellOff, CheckCircle2, Download, ExternalLink, FolderOpen, Gamepad2, Info, Minus, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { UpdatePlan } from '../../shared/api';
 import type { UpdateSite } from '../../shared/types';
-import { laterSources, laterSourcesText } from '../../shared/updatable';
+import { laterSources, newestPage } from '../../shared/updatable';
 import { formatVersion } from '../../shared/version';
 import { Dialog, useConfirm } from './dialog';
 import { CORE_KEY, downloadOptions } from './eligibility';
-import { fileName, formatBytes, formatCount, formatShortDate, plural, SOURCE_LABEL, timeAgo } from './format';
+import { fileName, formatBytes, formatCount, formatShortDate, plural, shortTitle, SOURCE_LABEL, timeAgo } from './format';
 import { useToast } from './toast';
 import { api, type AppModel } from './useApp';
 import { useSiteToggle } from './useSiteToggle';
@@ -108,12 +108,24 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
   const nothingChosen = chosenReplace + chosenAdd + remove.length === 0;
   const later = plan?.upToDate ? laterSources(creator?.remotes ?? [], plan.downloadUrl) : [];
   /**
-   * This page has nothing to install, yet the creator still counts as updated: something else of
-   * theirs is newer. Taken from the creator's own status, the same thing the row says, so the two
-   * can't disagree — "Mark as seen" here must clear the row, and marking only up to this page's
-   * date wouldn't when a later page exists.
+   * A page of theirs that's newer than the one downloaded from — named, so it can be fetched,
+   * opened or dropped rather than alluded to. Not the same page: matching the newest page and still
+   * counting as an update means the dates differ, not the files.
    */
-  const newerElsewhere = Boolean(plan?.upToDate && creator?.status === 'update-available');
+  const newest = plan?.upToDate ? newestPage(creator?.remotes ?? []) : undefined;
+  const newerElsewhere = Boolean(newest && newest.listing.url !== plan?.downloadUrl && later.length > 0);
+  const newestName = !newest?.title || snapshot?.settings.hidePageTitles ? undefined : shortTitle(newest.title, 40);
+  const canGetNewest = newerElsewhere && options.some((o) => o.url === newest?.listing.url);
+
+  const dropPage = async (r: NonNullable<typeof newest>): Promise<void> => {
+    const done = await app.run(() => api.rejectLink(target.key, r.listing.url));
+    if (!done) return;
+    toast({
+      text: `Removed that ${SOURCE_LABEL[r.listing.source]} page from ${target.name}`,
+      action: { label: 'Undo', run: () => void app.run(() => api.undoRejectLink(target.key, r.listing.url)) },
+    });
+    close();
+  };
 
   const stopChecking = async (site: UpdateSite): Promise<void> => {
     const label = SOURCE_LABEL[site];
@@ -190,8 +202,11 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
               disabled: busy || installing,
               label: (
                 <>
-                  <strong>{o.label}</strong>{' '}
+                  {/* The page's name where there is one: with a dozen pages on one site, the
+                      site's name on every chip is the one thing that can't tell them apart. */}
+                  <strong>{o.title ? shortTitle(o.title) : o.label}</strong>{' '}
                   <span className="faint">
+                    {o.title && `${o.label} · `}
                     {formatShortDate(o.updatedAt)}
                     {o.version && ` · ${formatVersion(o.version)}`}
                   </span>
@@ -244,19 +259,33 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
           <Banner
             tone="info"
             title={`Nothing new on this ${shownLabel ?? 'source'} page`}
-            actions={later.map((r) => (
-              <Button key={r.listing.url} size="sm" icon={ExternalLink} onClick={() => app.run(() => api.openExternal(r.listing.url))}>
-                {r.listing.source === plan?.source ? 'Open the newer page' : `Open ${SOURCE_LABEL[r.listing.source]}`}
-              </Button>
-            ))}
+            actions={
+              newest &&
+              (canGetNewest ? (
+                <Button size="sm" icon={Download} onClick={() => chooseSource(newest.listing.url)} disabled={busy || installing}>
+                  Get that one
+                </Button>
+              ) : (
+                <Button size="sm" icon={ExternalLink} onClick={() => app.run(() => api.openExternal(newest.listing.url))}>
+                  Open page
+                </Button>
+              ))
+            }
           >
             <p>
-              Your files match the ones on this page, so there's nothing to install here.{' '}
-              {later.length
-                ? `${laterSourcesText(later, undefined, plan?.source)}, so the new release may only be there.`
-                : `Another page of ${target.name}'s is newer than your files — often a pack you don't have. Marking all as seen hides this until something newer still appears.`}
+              Newer: <strong>{newestName ?? `another ${newest ? SOURCE_LABEL[newest.listing.source] : ''} page`}</strong>
+              {newest?.updatedAt !== undefined && ` (${formatShortDate(newest.updatedAt)})`} — likely a pack you don't have.
             </p>
-            {later.map((r) => {
+            {newest && (
+              <p className="off-links">
+                <button type="button" className="link-btn accent" onClick={() => void dropPage(newest)}>
+                  <Trash2 size={14} aria-hidden="true" /> Don't follow it? Remove that page
+                </button>
+              </p>
+            )}
+            {/* Turning a whole site off only makes sense for one you're not already downloading
+                from; for another page of this site, removing that page is the answer. */}
+            {later.filter((r) => r.listing.source !== plan?.source).map((r) => {
               const site = r.listing.source as UpdateSite;
               return (
                 <p key={r.listing.url} className="off-links">
@@ -271,9 +300,8 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
             })}
           </Banner>
         ) : (
-          <Banner tone="ok" title="Already up to date">
-            Your files match the ones on {shownLabel ?? 'this source'}, so there's nothing to install. Mark it as seen to hide this update
-            until a newer one appears.
+          <Banner tone="ok" title="Nothing to install — you already have this">
+            Turns out the creator's page date is different than yours, but the file itself is the same - Nothing to update after all! Mark this as seen and {target.name} will no longer prompt for updates until the next one is posted.
           </Banner>
         )
       )}
