@@ -30,6 +30,8 @@ I want to also make this clear - While WhimWatch was built with LLM-assistance, 
 
 I designed WhimWatch to be respectful of privacy, secure, easy-to-use, customizable, and simple to submit improvements and bug reports to.
 
+I encourage all users to be skeptical of any applications built by an anonymous stranger, especially when AI/LLMs are involved - To that end, I encourage users who are suspicious of the files here or anywhere to upload them to antivirus scanner sites like [VirusTotal](https://www.virustotal.com/gui/home/upload) if you want to have some form of confirmation that the files are safe (if you are not a programmer/don't feel like reading through the code yourself).
+
 I do my best to test the application as far as possible, but am limited by the packages and subscriptions I have available to me, so feedback from those on other operating systems, package sites, and other circumstances is vital to ensuring the app handles as many packages as seamlessly as possible:
 
 You can always submit an Issue or PR here with feedback, bug reports, or features, and you can also contact me on reddit at [4thewhimsy](https://www.reddit.com/user/4thewhimsy/).
