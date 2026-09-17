@@ -62,7 +62,7 @@ class SignInGuide {
   constructor(
     private readonly site: BrowserSite,
     private readonly main: BrowserWindow,
-  ) {}
+  ) { }
 
   /**
    * Sign-in pop-ups stay real windows of the same session. "Continue with
@@ -132,12 +132,8 @@ class SignInGuide {
     const { response } = await dialog.showMessageBox(target, {
       type: 'info',
       title: "Google sign-in doesn't work inside apps",
-      message: 'Google won\'t sign you in from inside another app, so "Continue with Google" can\'t finish here.',
-      detail: [
-        `The email box on the ${label} page won't help either: for an account made with Google, ${label} answers "Log in with your Google account".`,
-        '',
-        `What works is a password of your own. Open ${label} in your browser, sign in with Google there, and ${PASSWORD_PATH[this.site] ?? 'add a password in your account settings'}. Then sign in here with your email and that password. It's an extra way in, not a swap: Google still signs you in everywhere else, and WhimWatch never sees the password — only the login cookie ${label} sets.`,
-      ].join('\n'),
+      message: 'For security reasons, Google refuses in-app sign-ins.',
+      detail: `Patreon checks will continue to work, but to download updates, the workaround is to set a password *in addition to* your Google sign-in: Open ${label} in your browser, sign in with Google there, and ${PASSWORD_PATH[this.site] ?? 'add a password in your account settings'}.\nThen sign in here with your email and that password.\nGoogle sign-in still works in addition to the password, and WhimWatch never sees your password.`,
       buttons: [`Open ${label} in my browser`, `Back to the ${label} login page`, 'Leave it open'],
       defaultId: 0,
       cancelId: 2,
