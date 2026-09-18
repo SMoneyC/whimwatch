@@ -333,10 +333,13 @@ function SourceCard({ remote: r, creator, app, hideTitle }: { remote: RemoteInfo
       </div>
       <div className="source-meta">
         {!problem && (
-          <span className="faint small">
-            {formatShortDate(r.updatedAt)}
-            {r.version && ` · ${formatVersion(r.version)}`}
-          </span>
+          <>
+            <span className="faint small">{formatShortDate(r.updatedAt)}</span>
+            {/* Sites put whatever they like in the version field — LoversLab hands back things like
+                "80_updated_1016_anims - 03/19/25" — so it sits on its own line and is the thing that
+                gives way, rather than squeezing the site's name and page title down to nothing. */}
+            {r.version && <span className="faint small source-version">{formatVersion(r.version)}</span>}
+          </>
         )}
         {r.listing.origin === 'discovered' && <span className="tag">Suggested</span>}
         {r.listing.origin === 'manual' && <span className="tag">Added by you</span>}

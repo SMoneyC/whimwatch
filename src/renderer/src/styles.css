@@ -1378,7 +1378,9 @@ button.chip {
 
 .source-text {
   flex: 1;
-  min-width: 0;
+  /* A floor, so a long version string can't shrink the name and title to nothing and leave them
+     painting over the date. Anything left over goes to the version, which truncates. */
+  min-width: 96px;
   display: flex;
   flex-direction: column;
 }
@@ -1407,7 +1409,16 @@ button.chip {
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
+  /* Gives way before the site's name and page title do; see .source-text. */
+  min-width: 0;
   white-space: nowrap;
+}
+
+/* The date is worth keeping whole; a site's idea of a version number is not. */
+.source-version {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .creator-foot {
