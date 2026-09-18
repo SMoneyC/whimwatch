@@ -101,8 +101,18 @@ export function Header({
         </label>
       )}
 
-      <Button variant="quiet" icon={History} className={view === 'history' ? 'active' : ''} aria-pressed={view === 'history'} onClick={() => onView(view === 'history' ? 'home' : 'history')}>
-        History
+      {/* The label is hidden on narrow windows, where the header runs out of room; the icon and the
+          accessible name carry it from there. */}
+      <Button
+        variant="quiet"
+        icon={History}
+        className={view === 'history' ? 'active' : ''}
+        aria-pressed={view === 'history'}
+        aria-label="History"
+        title="History"
+        onClick={() => onView(view === 'history' ? 'home' : 'history')}
+      >
+        <span className="btn-label">History</span>
       </Button>
 
       {snapshot.running ? (

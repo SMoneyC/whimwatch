@@ -866,6 +866,14 @@ input[type='search']::-webkit-search-cancel-button {
   font: inherit;
 }
 
+/* In its own element so it can be the part that gives way when the header is short of room. */
+.chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 button.chip {
   padding: 0 12px 0 10px;
 }
@@ -2478,6 +2486,52 @@ button.chip {
   .search {
     width: 180px;
   }
+  /* Below this the header has more in it than fits, so search gives up its box and becomes the
+     magnifier alone. The input is still there at zero width — the label focuses it, so clicking the
+     icon opens it, and "/" still works — and it opens again on its own whenever there's a search in
+     progress, so a filter is never hidden behind an icon. */
+  .search.collapsible {
+    /* flex: none, or the header squashes the icon to nothing at the narrowest window. */
+    flex: none;
+    width: 34px;
+    padding: 0;
+    justify-content: center;
+    overflow: hidden;
+    transition: width 120ms ease;
+  }
+  .search.collapsible input {
+    flex: 0 0 0;
+    width: 0;
+  }
+  .search.collapsible .kbd {
+    display: none;
+  }
+  .search.collapsible:focus-within,
+  .search.collapsible:has(input:not(:placeholder-shown)) {
+    width: 200px;
+    padding: 0 8px 0 11px;
+    justify-content: flex-start;
+  }
+  .search.collapsible:focus-within input,
+  .search.collapsible:has(input:not(:placeholder-shown)) input {
+    flex: 1;
+    width: auto;
+  }
+  /* Opening search takes its room from the chip's wording rather than floating over it. An overlay
+     covered the chip's dismiss button — and the batch chip is a button all over — so the room has
+     to come out of the one part that can spare it. The chip keeps its icon, enough text to read as
+     itself, and its ×; the wording returns in full the moment search closes.
+
+     A :has() cannot be nested inside another :has(), and one invalid selector voids the whole rule
+     silently — so these match the input directly rather than reusing :focus-within on the box. */
+  .topbar:has(.search.collapsible input:focus) .chip,
+  .topbar:has(.search.collapsible input:not(:placeholder-shown)) .chip {
+    min-width: 80px;
+  }
+  .topbar:has(.search.collapsible input:focus) .chip-main,
+  .topbar:has(.search.collapsible input:not(:placeholder-shown)) .chip-main {
+    min-width: 0;
+  }
   .creator-head {
     grid-template-columns: minmax(0, 1fr) 130px 180px 32px;
   }
@@ -2512,6 +2566,18 @@ button.chip {
 }
 
 @media (max-width: 800px) {
+  /* The last thing the header can give up before it runs out of room: History drops to its icon,
+     which keeps its accessible name. Above this width the label still fits. */
+  .topbar .btn-label {
+    display: none;
+  }
+  /* Down here there isn't room for even a few words of the chip while search is open, and one
+     letter and an ellipsis reads as broken. The icon, the accent and the × still say a notice is
+     there, and hovering it gives the whole message. */
+  .topbar:has(.search.collapsible input:focus) .chip-text,
+  .topbar:has(.search.collapsible input:not(:placeholder-shown)) .chip-text {
+    display: none;
+  }
   .check-progress {
     width: 120px;
   }
