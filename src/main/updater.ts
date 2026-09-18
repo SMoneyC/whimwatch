@@ -318,12 +318,29 @@ export class Updater {
       });
       this.plans.delete(plan.id);
       await rm(workDir, { recursive: true, force: true });
-      progress('done', `Updated ${plan.name}`);
-      return await this.controller.recordInstall({ ...record, source: plan.source, batchId: meta.batchId, automatic: meta.automatic || undefined });
+      const newPack = this.isNewPackPage(plan);
+      progress('done', `${newPack ? 'Added' : 'Updated'} ${plan.name}`);
+      return await this.controller.recordInstall({
+        ...record,
+        source: plan.source,
+        batchId: meta.batchId,
+        automatic: meta.automatic || undefined,
+        newPack: newPack || undefined,
+      });
     } catch (err) {
       progress('error', (err as Error).message);
       throw err;
     }
+  }
+
+  /**
+   * Whether this was installed from a page the last check marked as a pack the user didn't have.
+   * Asked here rather than derived from the install's operations: an ordinary update that happens
+   * to only add files is indistinguishable by its operations alone.
+   */
+  private isNewPackPage(plan: UpdatePlan): boolean {
+    const creator = this.controller.currentState.lastResult?.creators.find((c) => c.key === plan.creatorKey);
+    return creator?.remotes.some((r) => r.listing.url === plan.downloadUrl && r.owned === 'no') ?? false;
   }
 
   /** Drops earlier prepared downloads for a creator (e.g. after switching source). */

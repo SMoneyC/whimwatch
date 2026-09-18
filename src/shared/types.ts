@@ -193,6 +193,11 @@ export interface InstallRecord {
   batchId?: string;
   /** Installed by "install automatically after a check". */
   automatic?: boolean;
+  /**
+   * Got from a page the check marked as a pack the user didn't have. Recorded rather than worked
+   * out later from the operations: an ordinary update that only adds files looks identical.
+   */
+  newPack?: boolean;
   undoneAt?: number;
   /** The backup was deleted (expired or cleared), so the update can't be undone. */
   backupDeletedAt?: number;

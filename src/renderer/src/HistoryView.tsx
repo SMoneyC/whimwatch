@@ -4,7 +4,17 @@ import type { StorageInfo } from '../../shared/api';
 import type { InstallRecord } from '../../shared/types';
 import { useConfirm } from './dialog';
 import { formatBytes, formatCount, formatShortDate, formatTime, plural, SOURCE_LABEL } from './format';
-import { dayLabel, fileCounts, type HistoryFilter, type HistoryItem, historyItems, isUndone, matchesFilter } from './history';
+import {
+  dayLabel,
+  fileCounts,
+  type HistoryFilter,
+  type HistoryItem,
+  historyItems,
+  isNewPackInstall,
+  isUndone,
+  matchesFilter,
+  undoRestoresFiles,
+} from './history';
 import { useToast } from './toast';
 import { api, type AppModel } from './useApp';
 import { Button, Disclosure, IconButton, Segmented } from './ui';
@@ -92,7 +102,9 @@ function HistoryEntry({ item, app }: { item: HistoryItem; app: AppModel }) {
 
   if (item.kind === 'seen') {
     const { event } = item;
-    const title = event.entries.length === 1 ? `Marked ${event.entries[0]!.name} as seen` : `Marked ${plural(event.entries.length, 'update')} as seen`;
+    // One click on one creator can mark several of its packs, so count creators rather than marks.
+    const names = [...new Set(event.entries.map((e) => e.name))];
+    const title = names.length === 1 ? `Marked ${names[0]} as seen` : `Marked ${plural(names.length, 'update')} as seen`;
     const detail = undone
       ? `Undone ${formatShortDate(event.undoneAt)} · these show as updates again`
       : `${event.automatic ? 'The download matched your files' : event.kind === 'all' ? 'Mark all as seen' : 'Hidden until a newer release is posted'} · ${formatTime(event.at)}`;
@@ -134,13 +146,21 @@ function HistoryEntry({ item, app }: { item: HistoryItem; app: AppModel }) {
     .join(', ');
   const automatic = records.some((r) => r.automatic);
   const first = records[0]!;
+  // A pack they went and got, rather than an update to something they had.
+  const newPack = isNewPackInstall(item);
   const title =
-    item.kind === 'batch' ? `Updated ${plural(records.length, 'pack')}` : `Updated ${first.name}${first.source ? ` from ${SOURCE_LABEL[first.source]}` : ''}`;
+    item.kind === 'batch'
+      ? `Updated ${plural(records.length, 'pack')}`
+      : `${newPack ? 'Added' : 'Updated'} ${first.name}${first.source ? ` from ${SOURCE_LABEL[first.source]}` : ''}`;
 
   let detail: string;
-  if (undone) detail = `Undone ${formatShortDate(Math.max(...records.map((r) => r.undoneAt ?? 0)))} · your old files were put back`;
-  else if (!live.length) detail = `${backupGone(records)} · ${formatShortDate(item.at)}`;
-  else detail = `${item.kind === 'batch' ? (automatic ? 'Installed after a check' : 'Update all') : automatic ? 'Installed after a check' : 'Update'} · ${files} · ${formatTime(item.at)}`;
+  if (undone) {
+    // Nothing is backed up for a file that wasn't there before, so undoing a pack only removes it.
+    const what = undoRestoresFiles(records) ? 'your old files were put back' : 'the files it added were removed';
+    detail = `Undone ${formatShortDate(Math.max(...records.map((r) => r.undoneAt ?? 0)))} · ${what}`;
+  } else if (!live.length) detail = `${backupGone(records)} · ${formatShortDate(item.at)}`;
+  else
+    detail = `${item.kind === 'batch' ? (automatic ? 'Installed after a check' : 'Update all') : automatic ? 'Installed after a check' : newPack ? 'New pack' : 'Update'} · ${files} · ${formatTime(item.at)}`;
 
   const undo = async (): Promise<void> => {
     if (item.kind === 'batch') {
@@ -152,7 +172,7 @@ function HistoryEntry({ item, app }: { item: HistoryItem; app: AppModel }) {
       if (!ok) return;
       if (await app.run(() => api.undoBatch(item.id))) toast({ text: `Undid ${plural(live.length, 'update')}` });
     } else if (await app.run(() => api.undoInstall(first.id))) {
-      toast({ text: `Undid the ${first.name} update` });
+      toast({ text: newPack ? `Removed the pack from ${first.name}` : `Undid the ${first.name} update` });
     }
   };
 

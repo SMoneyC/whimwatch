@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { toCreatorResult } from '../src/core/check.js';
+import { linkKey } from '../src/core/sources/urls.js';
 import { creatorStatus, outdatedRemotes, seenUpTo, TOLERANCE_MS } from '../src/core/compare.js';
 import { type CreatorGroup, fileNameKey, groupByCreator } from '../src/core/creators.js';
 import { classifyRemotes, datePacks, packFiles, packOwnership, packWords } from '../src/core/ownership.js';
 import { chooseRemote } from '../src/core/source-choice.js';
-import { linkKey } from '../src/core/sources/urls.js';
-import type { LocalFile, PackageKind, RemoteInfo } from '../src/shared/types.js';
+import { type HistoryItem, isNewPackInstall, undoRestoresFiles } from '../src/renderer/src/history.js';
+import type { InstallRecord, LocalFile, PackageKind, RemoteInfo } from '../src/shared/types.js';
 import { newPacks, ownedRemotes, updatableRemotes } from '../src/shared/updatable.js';
 
 const file = (relPath: string, opts: { author?: string; kind?: PackageKind; at?: string } = {}): LocalFile => ({
@@ -221,6 +222,47 @@ describe('an update to one pack is not hidden by a newer file from another', () 
     const files = [file('Moonberry_juniperpetal.package', { at: '2024-11-08' }), file('Moonberry_sorbet.package', { at: '2026-09-18' })];
     const c = toCreatorResult(group(files), [dated('Juniper Petal', '2024-12-15')]);
     expect(c.behindBy).toBe(Date.parse('2024-12-15') - Date.parse('2024-11-08'));
+  });
+});
+
+describe('History tells getting a pack apart from updating one', () => {
+  const record = (over: Partial<InstallRecord> = {}): InstallRecord => ({
+    id: 'i1',
+    creatorKey: 'moonberry',
+    name: 'Moonberry',
+    at: 0,
+    backupDir: '/backups/i1',
+    operations: [{ kind: 'add', target: '/Mods/Moonberry_sorbetbelttop.package' }],
+    ...over,
+  });
+  const entry = (r: InstallRecord): HistoryItem => ({ kind: 'install', id: r.id, at: r.at, record: r });
+
+  it('only calls it a new pack when the install said so', () => {
+    expect(isNewPackInstall(entry(record({ newPack: true })))).toBe(true);
+    // The case that made deriving this from the operations wrong: an ordinary update that happens
+    // to add a file and replace nothing.
+    expect(isNewPackInstall(entry(record()))).toBe(false);
+  });
+
+  it('never calls an Update all run a new pack', () => {
+    const batch: HistoryItem = { kind: 'batch', id: 'b1', at: 0, records: [record({ newPack: true }), record({ id: 'i2' })] };
+    expect(isNewPackInstall(batch)).toBe(false);
+  });
+
+  it('knows undoing a pack removes files rather than putting any back', () => {
+    expect(undoRestoresFiles([record()])).toBe(false);
+    expect(undoRestoresFiles([record({ operations: [{ kind: 'replace', target: '/Mods/a.package', backup: '/backups/i1/a.package' }] })])).toBe(true);
+    // Mixed: something was replaced, so something really does come back.
+    expect(
+      undoRestoresFiles([
+        record({
+          operations: [
+            { kind: 'add', target: '/Mods/new.package' },
+            { kind: 'replace', target: '/Mods/old.package', backup: '/backups/i1/old.package' },
+          ],
+        }),
+      ]),
+    ).toBe(true);
   });
 });
 

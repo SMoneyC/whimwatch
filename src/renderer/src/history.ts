@@ -36,6 +36,23 @@ export function matchesFilter(item: HistoryItem, filter: HistoryFilter): boolean
   return item.kind !== 'seen';
 }
 
+/**
+ * Whether this entry is a pack the user got rather than an update they installed. Read from the
+ * record, not from its operations: an ordinary update that only adds files has the same operations,
+ * and "Update all" never includes a new pack, so a batch is always an update.
+ */
+export function isNewPackInstall(item: HistoryItem): boolean {
+  return item.kind === 'install' && item.record.newPack === true;
+}
+
+/**
+ * Whether undoing put files back, as opposed to only deleting what was added. Nothing is backed up
+ * for a file that wasn't there before, so undoing a pack you got just removes it again.
+ */
+export function undoRestoresFiles(records: InstallRecord[]): boolean {
+  return records.some((r) => r.operations.some((o) => o.backup !== undefined));
+}
+
 export function fileCounts(records: InstallRecord[]): { replaced: number; added: number; removed: number } {
   const ops = records.flatMap((r) => r.operations);
   return {
