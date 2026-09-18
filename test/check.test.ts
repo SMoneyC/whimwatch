@@ -39,9 +39,9 @@ const withDate = (html: string, iso: string): string => html.replaceAll('2026-08
 
 const ROUTES = {
   'https://wickedwhimsmod.com/download': pages.WWMOD_DOWNLOAD,
-  'https://wicked.cc/animations/azmodan22/sex-animations/': withDate(pages.WICKEDCC_PACK, '2024-12-20T00:00:00+00:00').replace(/https:\/\/www\.patreon\.com\/tester/, 'https://www.patreon.com/someone-else'),
-  'https://www.loverslab.com/files/file/3528-azmodan22-animations/': pages.LOVERSLAB_FILE,
-  'https://www.loverslab.com/files/file/8755-kikis-animations/': pages.CHALLENGE,
+  'https://wicked.cc/animations/moonberry/sex-animations/': withDate(pages.WICKEDCC_PACK, '2024-12-20T00:00:00+00:00').replace(/https:\/\/www\.patreon\.com\/tester/, 'https://www.patreon.com/someone-else'),
+  'https://www.loverslab.com/files/file/3528-moonberry-animations/': pages.LOVERSLAB_FILE,
+  'https://www.loverslab.com/files/file/8755-willows-animations/': pages.CHALLENGE,
   'https://wicked.cc/animations/tester/': pages.WICKEDCC_CREATOR_INDEX,
   'https://wicked.cc/animations/tester/testers-animations': pages.WICKEDCC_PACK,
   'https://www.patreon.com/tester': pages.PATREON_PAGE,
@@ -65,9 +65,9 @@ describe('runCheck', () => {
 
   beforeAll(async () => {
     mods = await mkdtemp(join(tmpdir(), 'whimwatch-check-'));
-    await pkg('WW_Azmodan22.package', 'azmodan22', '2025-01-01');
+    await pkg('WW_Moonberry.package', 'moonberry', '2025-01-01');
     await pkg('WW_Tester.package', '!Tester', '2025-07-01');
-    await pkg('WW_Kiki.package', 'Kiki Chain', '2025-09-16');
+    await pkg('WW_Willow.package', 'Willow Bank', '2025-09-16');
     await pkg('Unlisted.package', 'Nobody', '2025-01-01');
     const core = join(mods, 'TURBODRIVER_WickedWhims_Scripts.ts4script');
     await writeFile(core, 'zip');
@@ -83,12 +83,12 @@ describe('runCheck', () => {
     expect(result.core).toMatchObject({ latestVersion: '185k', status: 'up-to-date', gameVersions: '1.127.41 (August 25)' });
 
     // Animator-section links only: the "Bondage Devices" box is ignored for animation packs.
-    expect(byName.azmodan22!.remotes.map((r) => [r.listing.source, r.status])).toEqual([
+    expect(byName.moonberry!.remotes.map((r) => [r.listing.source, r.status])).toEqual([
       ['wickedcc', 'ok'],
       ['loverslab', 'ok'],
     ]);
-    expect(byName.azmodan22!.status).toBe('up-to-date');
-    expect(byName.azmodan22!.remotes[1]!.version).toBe('2.6');
+    expect(byName.moonberry!.status).toBe('up-to-date');
+    expect(byName.moonberry!.remotes[1]!.version).toBe('2.6');
 
     // Not in the directory: found via wicked.cc creator index, then Patreon via the pack page.
     const tester = byName.Tester!;
@@ -102,7 +102,7 @@ describe('runCheck', () => {
     expect(discoveryCache.tester?.urls).toEqual(['https://wicked.cc/animations/tester/testers-animations']);
 
     // Directory match on a multi-word name; its only link is blocked by a challenge.
-    expect(byName['Kiki Chain']!.status).toBe('needs-verification');
+    expect(byName['Willow Bank']!.status).toBe('needs-verification');
 
     expect(byName.Nobody!.status).toBe('unknown');
   });
@@ -114,16 +114,16 @@ describe('runCheck', () => {
       fetcher,
       linkPrefs: {
         tester: { rejected: ['https://www.patreon.com/tester'], manual: [] },
-        nobody: { rejected: [], manual: ['https://www.loverslab.com/files/file/3528-azmodan22-animations/'] },
+        nobody: { rejected: [], manual: ['https://www.loverslab.com/files/file/3528-moonberry-animations/'] },
       },
       dismissed: { tester: Date.parse('2026-08-28T12:04:47Z'), [CORE_KEY]: 0 },
-      discoveryCache: { kikichain: { at: Date.now(), urls: [] } },
+      discoveryCache: { willowbank: { at: Date.now(), urls: [] } },
     });
     const byName = Object.fromEntries(result.creators.map((c) => [c.name, c]));
     expect(byName.Tester!.remotes.map((r) => r.listing.source)).toEqual(['wickedcc']);
     expect(byName.Tester!.status).toBe('up-to-date');
     expect(byName.Nobody!.remotes[0]!.listing.origin).toBe('manual');
-    expect(fetcher.calls).not.toContain('https://wicked.cc/animations/kiki-chain/');
+    expect(fetcher.calls).not.toContain('https://wicked.cc/animations/willow-chain/');
   });
 
   it('never contacts turned-off sites, and notes them on the creators that have pages there', async () => {
@@ -132,13 +132,13 @@ describe('runCheck', () => {
     const byName = Object.fromEntries(result.creators.map((c) => [c.name, c]));
     expect(fetcher.calls.filter((u) => /loverslab\.com|patreon\.com/.test(u))).toEqual([]);
 
-    expect(byName.azmodan22!.remotes.map((r) => r.listing.source)).toEqual(['wickedcc']);
-    expect(byName.azmodan22!.mutedSources).toEqual(['loverslab']);
+    expect(byName.moonberry!.remotes.map((r) => r.listing.source)).toEqual(['wickedcc']);
+    expect(byName.moonberry!.mutedSources).toEqual(['loverslab']);
     // The pack page links a Patreon, which is only noted; the wicked.cc date alone decides.
     expect(byName.Tester!.remotes.map((r) => r.listing.source)).toEqual(['wickedcc']);
     expect(byName.Tester!.mutedSources).toEqual(['patreon']);
     expect(byName.Tester!.remoteUpdatedAt).toBe(Date.parse('2026-08-28T12:04:47Z'));
-    expect(byName['Kiki Chain']).toMatchObject({ remotes: [], mutedSources: ['loverslab'], status: 'unknown' });
+    expect(byName['Willow Bank']).toMatchObject({ remotes: [], mutedSources: ['loverslab'], status: 'unknown' });
     expect(byName.Nobody!.mutedSources).toBeUndefined();
   });
 
@@ -148,16 +148,16 @@ describe('runCheck', () => {
       dirs: [mods],
       fetcher,
       linkPrefs: {
-        azmodan22: { rejected: [], manual: [], mutedSources: ['loverslab'] },
+        moonberry: { rejected: [], manual: [], mutedSources: ['loverslab'] },
         tester: { rejected: ['https://patreon.com/cw/Tester/'], manual: [] },
       },
     });
     const byName = Object.fromEntries(result.creators.map((c) => [c.name, c]));
-    expect(fetcher.calls).not.toContain('https://www.loverslab.com/files/file/3528-azmodan22-animations/');
-    expect(byName.azmodan22).toMatchObject({ mutedSources: ['loverslab'] });
-    expect(byName.azmodan22!.remotes.map((r) => r.listing.source)).toEqual(['wickedcc']);
+    expect(fetcher.calls).not.toContain('https://www.loverslab.com/files/file/3528-moonberry-animations/');
+    expect(byName.moonberry).toMatchObject({ mutedSources: ['loverslab'] });
+    expect(byName.moonberry!.remotes.map((r) => r.listing.source)).toEqual(['wickedcc']);
     // Another creator's LoversLab page is still checked.
-    expect(fetcher.calls).toContain('https://www.loverslab.com/files/file/8755-kikis-animations/');
+    expect(fetcher.calls).toContain('https://www.loverslab.com/files/file/8755-willows-animations/');
     // Removed as patreon.com/cw/Tester, found again as www.patreon.com/tester: still removed.
     expect(byName.Tester!.remotes.map((r) => r.listing.source)).toEqual(['wickedcc']);
   });
@@ -178,9 +178,9 @@ describe('runCheck', () => {
   it('reports browser-only sources as errors without a browser', async () => {
     const fetcher = new FakeFetcher(ROUTES);
     const { result } = await runCheck({ dirs: [mods], fetcher: { get: fetcher.get, head: fetcher.head } });
-    const kiki = result.creators.find((c) => c.name === 'Kiki Chain')!;
-    expect(kiki.remotes[0]).toMatchObject({ status: 'error', error: 'LoversLab can only be checked from the desktop app' });
-    expect(kiki.status).toBe('unknown');
+    const willow = result.creators.find((c) => c.name === 'Willow Bank')!;
+    expect(willow.remotes[0]).toMatchObject({ status: 'error', error: 'LoversLab can only be checked from the desktop app' });
+    expect(willow.status).toBe('unknown');
   });
 });
 

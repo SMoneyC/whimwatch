@@ -65,20 +65,20 @@ describe('groupByCreator', () => {
     authors: { [primaryAuthor]: 1 },
     primaryAuthor,
   });
-  const aliases = { error404phillips: 'e404p', e404pheight: 'e404p' };
+  const aliases = { echosims: 'echo', echoheight: 'echo' };
 
   it('merges aliases under the creator and shows the creator’s own name whichever file comes first', () => {
     for (const files of [
-      [file('a', 'Error404Phillips'), file('b', 'E404P'), file('c', 'E404P:HEIGHT')],
-      [file('b', 'E404P'), file('a', 'Error404Phillips'), file('c', 'E404P:HEIGHT')],
+      [file('a', 'EchoSims'), file('b', 'Echo'), file('c', 'Echo:HEIGHT')],
+      [file('b', 'Echo'), file('a', 'EchoSims'), file('c', 'Echo:HEIGHT')],
     ]) {
       const groups = groupByCreator(files, aliases);
-      expect(groups.map((g) => [g.key, g.name, g.files.length])).toEqual([['e404p', 'E404P', 3]]);
+      expect(groups.map((g) => [g.key, g.name, g.files.length])).toEqual([['echo', 'Echo', 3]]);
     }
   });
 
   it('keeps the first file’s name when none of the files use the creator’s own name', () => {
-    const groups = groupByCreator([file('a', 'OLL Animations (AP)')], { ollanimationsap: 'ooolalaworld' });
-    expect(groups.map((g) => [g.key, g.name])).toEqual([['ooolalaworld', 'OLL Animations (AP)']]);
+    const groups = groupByCreator([file('a', 'HBR Animations (AP)')], { hbranimationsap: 'harborworld' });
+    expect(groups.map((g) => [g.key, g.name])).toEqual([['harborworld', 'HBR Animations (AP)']]);
   });
 });

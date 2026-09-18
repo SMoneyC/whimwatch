@@ -1,8 +1,8 @@
 import type { LocalFile } from '../shared/types.js';
 
 /**
- * Normalizes creator names so "!Beebavel", "Grey Naya" and "wild_guy" compare
- * equal to "Beebavel", "GreyNaya" and "Wild Guy".
+ * Normalizes creator names so "!Northwind", "Grey Harbor" and "pine_glen"
+ * compare equal to "Northwind", "GreyHarbor" and "Pine Glen".
  */
 export function normalizeName(name: string): string {
   return name
@@ -31,7 +31,7 @@ export function groupByCreator(files: LocalFile[], aliases: Record<string, strin
       group = { key, name: cleanDisplayName(file.primaryAuthor), files: [] };
       groups.set(key, group);
     } else if (norm === key && normalizeName(group.name) !== key) {
-      // The creator's own name beats an alias that was scanned first: "E404P", not "Error404Phillips".
+      // The creator's own name beats an alias that was scanned first: "Echo", not "EchoSims".
       group.name = cleanDisplayName(file.primaryAuthor);
     }
     group.files.push(file);
@@ -39,14 +39,14 @@ export function groupByCreator(files: LocalFile[], aliases: Record<string, strin
   return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
 
-/** Drops sort-order prefixes and trailing decoration: "!Beebavel" → "Beebavel", "AYONE!" → "AYONE". */
+/** Drops sort-order prefixes and trailing decoration: "!Northwind" → "Northwind", "LUMEN!" → "LUMEN". */
 function cleanDisplayName(name: string): string {
   return name.replace(/^[^\p{L}\p{N}([]+/u, '').replace(/[\s!.,;:_~*-]+$/u, '') || name;
 }
 
 /**
  * Finds the directory entry for a creator. Exact normalized match first, then
- * a prefix match for names like "Kiki Chain" vs "Kiki" (min 4 chars).
+ * a prefix match for names like "Willow Bank" vs "Willow" (min 4 chars).
  */
 export function matchName<T extends { name: string }>(creatorKey: string, candidates: T[]): T | undefined {
   const exact = candidates.find((c) => normalizeName(c.name) === creatorKey);

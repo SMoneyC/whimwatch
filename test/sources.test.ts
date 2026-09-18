@@ -34,20 +34,20 @@ describe('wickedwhimsmod.com download page', () => {
   it('reads artist boxes with sections and supported links', () => {
     expect(page.directory).toEqual([
       {
-        name: 'Azmodan22',
+        name: 'Moonberry',
         section: 'Honorary Animators (Compatible)',
         links: [
-          { source: 'wickedcc', url: 'https://wicked.cc/animations/azmodan22/sex-animations/', origin: 'directory' },
-          { source: 'loverslab', url: 'https://www.loverslab.com/files/file/3528-azmodan22-animations/', origin: 'directory' },
+          { source: 'wickedcc', url: 'https://wicked.cc/animations/moonberry/sex-animations/', origin: 'directory' },
+          { source: 'loverslab', url: 'https://www.loverslab.com/files/file/3528-moonberry-animations/', origin: 'directory' },
         ],
       },
       {
-        name: 'Kiki Chain',
+        name: 'Willow Bank',
         section: 'Inactive Animators (Compatible)',
-        links: [{ source: 'loverslab', url: 'https://www.loverslab.com/files/file/8755-kikis-animations/', origin: 'directory' }],
+        links: [{ source: 'loverslab', url: 'https://www.loverslab.com/files/file/8755-willows-animations/', origin: 'directory' }],
       },
       {
-        name: 'Azmodan22',
+        name: 'Moonberry',
         item: 'Bondage Devices',
         section: 'Devices & Accessories (Optional)',
         links: [{ source: 'loverslab', url: 'https://www.loverslab.com/files/file/3527-bondage-devices/', origin: 'directory' }],
@@ -96,10 +96,10 @@ describe('LoversLab', () => {
   });
 
   it('lists every file on the download chooser', () => {
-    expect(parseDownloadChooser(pages.LOVERSLAB_CHOOSER, 'https://www.loverslab.com/files/file/29320-0nizu/')).toEqual([
-      { href: 'https://www.loverslab.com/files/file/29320-0nizu/?do=download&r=1001&confirm=1&t=1&csrfKey=abc', name: 'WW_0nizu_SpecialGift_Animations.package' },
-      { href: 'https://www.loverslab.com/files/file/29320-0nizu/?do=download&r=1002&confirm=1&t=1&csrfKey=abc', name: 'WW_0nizu_Animations.package' },
-      { href: 'https://www.loverslab.com/files/file/29320-0nizu/?do=download&r=1003&confirm=1&t=1&csrfKey=abc', name: 'preview.jpg' },
+    expect(parseDownloadChooser(pages.LOVERSLAB_CHOOSER, 'https://www.loverslab.com/files/file/29320-0rchid/')).toEqual([
+      { href: 'https://www.loverslab.com/files/file/29320-0rchid/?do=download&r=1001&confirm=1&t=1&csrfKey=abc', name: 'WW_0rchid_SpecialGift_Animations.package' },
+      { href: 'https://www.loverslab.com/files/file/29320-0rchid/?do=download&r=1002&confirm=1&t=1&csrfKey=abc', name: 'WW_0rchid_Animations.package' },
+      { href: 'https://www.loverslab.com/files/file/29320-0rchid/?do=download&r=1003&confirm=1&t=1&csrfKey=abc', name: 'preview.jpg' },
     ]);
   });
 
@@ -210,9 +210,9 @@ describe('Patreon', () => {
 describe('URL helpers', () => {
   it.each([
     ['https://wicked.cc/animations/a/b/', 'wickedcc'],
-    ['https://www.loverslab.com/files/file/27388-lamaboy/', 'loverslab'],
+    ['https://www.loverslab.com/files/file/27388-pineglen/', 'loverslab'],
     ['https://www.loverslab.com/topic/79210-eve-mesh/', undefined],
-    ['https://www.patreon.com/LAMABOY', 'patreon'],
+    ['https://www.patreon.com/PINEGLEN', 'patreon'],
     ['https://www.patreon.com/posts/abc-123', undefined],
     ['https://example.com/', undefined],
   ])('classifies %s', (url, source) => {
@@ -220,11 +220,11 @@ describe('URL helpers', () => {
   });
 
   it.each([
-    ['https://www.patreon.com/anarcis', 'anarcis'],
-    ['https://patreon.com/c/Creamydelicious', 'Creamydelicious'],
-    ['https://www.patreon.com/cw/Beebavel_WW', 'Beebavel_WW'],
-    ['https://www.patreon.com/LAMABOY/posts', 'LAMABOY'],
-    ['https://www.patreon.com/join/LAMABOY?u=1', undefined],
+    ['https://www.patreon.com/thornwood', 'thornwood'],
+    ['https://patreon.com/c/Amberlily', 'Amberlily'],
+    ['https://www.patreon.com/cw/Northwind_WW', 'Northwind_WW'],
+    ['https://www.patreon.com/PINEGLEN/posts', 'PINEGLEN'],
+    ['https://www.patreon.com/join/PINEGLEN?u=1', undefined],
     ['https://www.patreon.com/posts/august-1', undefined],
     ['https://www.patreon.com/user?u=123', undefined],
   ])('extracts the Patreon vanity from %s', (url, vanity) => {
@@ -244,11 +244,11 @@ describe('URL helpers', () => {
   });
 
   it('gives every address form of a Patreon page the same key', () => {
-    const key = linkKey('https://www.patreon.com/SimsAlchemist');
-    for (const form of ['https://patreon.com/cw/SimsAlchemist', 'https://www.patreon.com/c/simsalchemist/posts', 'https://www.patreon.com/SimsAlchemist/']) {
+    const key = linkKey('https://www.patreon.com/SimsLarkspur');
+    for (const form of ['https://patreon.com/cw/SimsLarkspur', 'https://www.patreon.com/c/simslarkspur/posts', 'https://www.patreon.com/SimsLarkspur/']) {
       expect(linkKey(form)).toBe(key);
     }
-    expect(linkKey('https://www.patreon.com/ATrois')).not.toBe(key);
+    expect(linkKey('https://www.patreon.com/Thornwood')).not.toBe(key);
     expect(linkKey('http://www.LoversLab.com/files/file/1-x/')).toBe('https://loverslab.com/files/file/1-x');
   });
 });

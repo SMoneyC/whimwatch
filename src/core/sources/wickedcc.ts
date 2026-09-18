@@ -52,7 +52,7 @@ export function parseWickedCcPage(html: string, pageUrl: string): WickedCcPage {
   return { title, author, updatedAt, publishedAt, version, downloadUrl, patreonLinks };
 }
 
-/** Pack links listed on a creator index page such as /animations/anarcis/. */
+/** Pack links listed on a creator index page such as /animations/<creator>/. */
 export function parseCreatorIndex(html: string, creatorPath: string): string[] {
   const $ = cheerio.load(html);
   const prefix = `https://wicked.cc${creatorPath.replace(/\/$/, '')}/`;

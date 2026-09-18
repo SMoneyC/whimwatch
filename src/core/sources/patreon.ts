@@ -109,7 +109,7 @@ export function postDetailApiUrl(postId: string): string {
 }
 
 /**
- * Post id from either address form: the API's "https://www.patreon.com/LAMABOY/posts/august-168696378" or
+ * Post id from either address form: the API's "https://www.patreon.com/creator/posts/august-168696378" or
  * the short "https://www.patreon.com/posts/download-files-84153874" that post text links use.
  */
 export function patreonPostId(url: string): string | undefined {

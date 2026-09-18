@@ -67,11 +67,11 @@ describe('state saving', () => {
     const path = join(tmp, 'sites.json');
     const state = defaultState();
     state.settings.mutedSources = ['loverslab'];
-    state.linkPrefs.lamaboy = { rejected: [], manual: [], mutedSources: ['patreon', 'wickedcc'] };
+    state.linkPrefs.pineglen = { rejected: [], manual: [], mutedSources: ['patreon', 'wickedcc'] };
     await saveState(path, state);
     const loaded = await loadState(path);
     expect(loaded.settings.mutedSources).toEqual(['loverslab']);
-    expect(loaded.linkPrefs.lamaboy?.mutedSources).toEqual(['patreon', 'wickedcc']);
+    expect(loaded.linkPrefs.pineglen?.mutedSources).toEqual(['patreon', 'wickedcc']);
 
     // A state file from before the setting existed turns nothing off.
     const { mutedSources: _dropped, ...oldSettings } = defaultState().settings;

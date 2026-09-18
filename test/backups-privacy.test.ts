@@ -28,9 +28,9 @@ describe('backup retention', () => {
 
   it('finds orphaned backup folders but never foreign or brand-new ones', () => {
     const fresh = `${now - 60_000}-wildguy`;
-    const names = [`${now - 40 * DAY}-anarcis`, `${now - 2 * DAY}-kept`, fresh, 'My important folder'];
+    const names = [`${now - 40 * DAY}-thornwood`, `${now - 2 * DAY}-kept`, fresh, 'My important folder'];
     const installs = [record(`${now - 2 * DAY}-kept`, 2)];
-    expect(orphanBackupDirs(names, '/backups', installs, now, 60 * 60 * 1000)).toEqual([join('/backups', `${now - 40 * DAY}-anarcis`)]);
+    expect(orphanBackupDirs(names, '/backups', installs, now, 60 * 60 * 1000)).toEqual([join('/backups', `${now - 40 * DAY}-thornwood`)]);
     expect(orphanBackupDirs(names, '/backups', [], now)).toHaveLength(3);
   });
 });

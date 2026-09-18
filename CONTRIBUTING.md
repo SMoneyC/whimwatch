@@ -75,19 +75,19 @@ edit [`catalog/overrides.json`](catalog/overrides.json):
 ```json
 {
   "version": 1,
-  "aliases": { "kikichain": "kiki" },
+  "aliases": { "willowbank": "willow" },
   "creators": {
-    "lamaboy": { "name": "LAMABOY", "links": ["https://www.patreon.com/LAMABOY"] }
+    "pineglen": { "name": "Pine Glen", "links": ["https://www.patreon.com/PineGlen"] }
   }
 }
 ```
 
-- **Keys are normalized names:** lowercase, letters and digits only. `Grey Naya` becomes `greynaya`
-  and `!Beebavel` becomes `beebavel`.
+- **Keys are normalized names:** lowercase, letters and digits only. `Grey Harbor` becomes `greyharbor`
+  and `!Northwind` becomes `northwind`.
 - **Where the name comes from:** it's what the creator puts in their package (`animation_author`).
   In the app, it's the creator name shown in the list.
-- **`aliases`** merges spellings: `"kikichain": "kiki"` groups packages credited to "Kiki Chain" with
-  "Kiki".
+- **`aliases`** merges spellings: `"willowbank": "willow"` groups packages credited to "Willow Bank" with
+  "Willow".
 - **Supported links:** wicked.cc pages, LoversLab file pages (`/files/file/…`) and Patreon creator
   pages.
 - **Only pages the creator runs or chose to publish on.** Sites that re-upload creators' packs,

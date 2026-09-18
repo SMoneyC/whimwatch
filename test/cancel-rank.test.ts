@@ -57,11 +57,11 @@ describe('source ranking', () => {
 
   it('names the page an update comes from, skipping ones that failed to check', () => {
     const owned = remote('wickedcc', '2026-07-05T12:00:00Z', { title: 'Slipping Underwear' });
-    const newest = remote('wickedcc', '2026-09-16T12:00:00Z', { title: 'Cassius Lace Lingerie' });
+    const newest = remote('wickedcc', '2026-09-16T12:00:00Z', { title: 'Verbena Lace Lingerie' });
     const broken = remote('wickedcc', '2026-09-20T12:00:00Z', { status: 'error' });
     const undated = remote('patreon', '2026-09-18T12:00:00Z', { updatedAt: undefined });
 
-    expect(newestPage([owned, newest, broken, undated])?.title).toBe('Cassius Lace Lingerie');
+    expect(newestPage([owned, newest, broken, undated])?.title).toBe('Verbena Lace Lingerie');
     expect(newestPage([])).toBeUndefined();
     expect(newestPage([broken, undated])).toBeUndefined();
   });

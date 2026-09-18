@@ -3,7 +3,7 @@ import { fileNameFrom, isAllowedDownloadHost, safeFileName } from '../src/core/d
 
 describe('download helpers', () => {
   it.each([
-    ['https://files.wicked.cc/file/wickedcc/WW_Anarcis.zip', true],
+    ['https://files.wicked.cc/file/wickedcc/WW_Thornwood.zip', true],
     ['https://www.loverslab.com/files/file/1-x/?do=download', true],
     ['https://c10.patreonusercontent.com/abc', true],
     ['https://mega.nz/file/abc#key', true],
@@ -17,7 +17,7 @@ describe('download helpers', () => {
   it('prefers Content-Disposition names and strips paths', () => {
     expect(fileNameFrom('attachment; filename="WW_Pack.zip"', 'https://x/y')).toBe('WW_Pack.zip');
     expect(fileNameFrom("attachment; filename*=UTF-8''WW%20Pack%E2%99%A5.zip", 'https://x/y')).toBe('WW Pack♥.zip');
-    expect(fileNameFrom(null, 'https://files.wicked.cc/file/wickedcc/WW_Anarcis.zip')).toBe('WW_Anarcis.zip');
+    expect(fileNameFrom(null, 'https://files.wicked.cc/file/wickedcc/WW_Thornwood.zip')).toBe('WW_Thornwood.zip');
     expect(fileNameFrom('attachment; filename="../../evil.zip"', 'https://x/y')).toBe('evil.zip');
   });
 

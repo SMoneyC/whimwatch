@@ -17,24 +17,24 @@ export const WWMOD_DOWNLOAD = `<!doctype html><html><body>
 <p><h1>Honorary Animators (Compatible)</h1><hr/></p>
 <div class="download-boxes">
   <div class="download-box">
-    <div class="download-box-title"> Azmodan22 </div>
+    <div class="download-box-title"> Moonberry </div>
     <div class="download-box-links">
-      <a href="https://wicked.cc/animations/azmodan22/sex-animations/"><img src="wcc.png"></a><a href="https://www.loverslab.com/files/file/3528-azmodan22-animations/"><img src="ll.png"></a>
+      <a href="https://wicked.cc/animations/moonberry/sex-animations/"><img src="wcc.png"></a><a href="https://www.loverslab.com/files/file/3528-moonberry-animations/"><img src="ll.png"></a>
     </div>
   </div>
 </div>
 <p><h1>Inactive Animators (Compatible)</h1><hr/></p>
 <div class="download-boxes">
   <div class="download-box download-box-small">
-    <div class="download-box-title download-box-title-small"> <b>Kiki Chain</b> </div>
-    <div class="download-box-links download-box-links-small"><a href="https://www.loverslab.com/files/file/8755-kikis-animations/"><img src="ll.png"></a></div>
+    <div class="download-box-title download-box-title-small"> <b>Willow Bank</b> </div>
+    <div class="download-box-links download-box-links-small"><a href="https://www.loverslab.com/files/file/8755-willows-animations/"><img src="ll.png"></a></div>
   </div>
 </div>
 <p><h1>Devices &amp; Accessories (Optional)</h1><hr/></p>
 <div class="download-boxes">
   <div class="download-box download-box-big">
     <div class="download-box-title"> Bondage Devices </div>
-    <div class="download-box-text download-box-text-big"> Azmodan22 </div>
+    <div class="download-box-text download-box-text-big"> Moonberry </div>
     <div class="download-box-links"><a href="https://www.loverslab.com/files/file/3527-bondage-devices/"><img src="ll.png"></a><a href="https://example.com/site"><img src="web.png"></a></div>
   </div>
 </div>
@@ -79,7 +79,7 @@ export const CHALLENGE_UNTITLED = `<!DOCTYPE html><html lang="en-US"><head><titl
 <script>window._cf_chl_opt={cvId:'3',cType:'managed',cRay:'a3c3ec2ecb696417'};</script></body></html>`;
 
 /** Cloudflare adds its detection script to ordinary pages too; that alone is not a challenge. */
-export const PATREON_WITH_CF_SCRIPT = `<!doctype html><html><head><title>LAMABOY | Patreon</title></head><body>
+export const PATREON_WITH_CF_SCRIPT = `<!doctype html><html><head><title>PINEGLEN | Patreon</title></head><body>
 <script src="/cdn-cgi/challenge-platform/h/b/scripts/jsd/main.js"></script><h1>Posts</h1></body></html>`;
 
 export const PATREON_PAGE = `<!doctype html><html><body><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"bootstrapEnvelope":{"pageBootstrap":{"campaign":{"data":{"id":"10577235","type":"campaign"}}}}}}}</script></body></html>`;
@@ -96,16 +96,16 @@ export const PATREON_POSTS = JSON.stringify({
 export const LOVERSLAB_CHOOSER = `<!doctype html><html><body>
 <div class="ipsBox"><ul class="ipsDataList">
   <li class="ipsDataItem">
-    <div class="ipsDataItem_main"><h4 class="ipsDataItem_title">WW_0nizu_SpecialGift_Animations.package</h4><p class="ipsType_light">4.2 MB</p></div>
-    <div class="ipsDataItem_generic"><a href="https://www.loverslab.com/files/file/29320-0nizu/?do=download&amp;r=1001&amp;confirm=1&amp;t=1&amp;csrfKey=abc" class="ipsButton">Download</a></div>
+    <div class="ipsDataItem_main"><h4 class="ipsDataItem_title">WW_0rchid_SpecialGift_Animations.package</h4><p class="ipsType_light">4.2 MB</p></div>
+    <div class="ipsDataItem_generic"><a href="https://www.loverslab.com/files/file/29320-0rchid/?do=download&amp;r=1001&amp;confirm=1&amp;t=1&amp;csrfKey=abc" class="ipsButton">Download</a></div>
   </li>
   <li class="ipsDataItem">
-    <div class="ipsDataItem_main"><h4 class="ipsDataItem_title">WW_0nizu_Animations.package</h4><p class="ipsType_light">29.5 MB</p></div>
-    <div class="ipsDataItem_generic"><a href="https://www.loverslab.com/files/file/29320-0nizu/?do=download&amp;r=1002&amp;confirm=1&amp;t=1&amp;csrfKey=abc" class="ipsButton">Download</a></div>
+    <div class="ipsDataItem_main"><h4 class="ipsDataItem_title">WW_0rchid_Animations.package</h4><p class="ipsType_light">29.5 MB</p></div>
+    <div class="ipsDataItem_generic"><a href="https://www.loverslab.com/files/file/29320-0rchid/?do=download&amp;r=1002&amp;confirm=1&amp;t=1&amp;csrfKey=abc" class="ipsButton">Download</a></div>
   </li>
   <li class="ipsDataItem">
     <div class="ipsDataItem_main"><h4 class="ipsDataItem_title">preview.jpg</h4></div>
-    <div class="ipsDataItem_generic"><a href="/files/file/29320-0nizu/?do=download&amp;r=1003&amp;confirm=1&amp;t=1&amp;csrfKey=abc" class="ipsButton">Download</a></div>
+    <div class="ipsDataItem_generic"><a href="/files/file/29320-0rchid/?do=download&amp;r=1003&amp;confirm=1&amp;t=1&amp;csrfKey=abc" class="ipsButton">Download</a></div>
   </li>
 </ul></div>
 </body></html>`;

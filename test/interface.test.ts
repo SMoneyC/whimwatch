@@ -160,10 +160,10 @@ describe('wording and shortcuts', () => {
   });
 
   it('shortens a long page name without cutting a character in half', () => {
-    expect(shortTitle('Gelato Set')).toBe('Gelato Set');
-    expect(shortTitle('  Celestia Dress ~UNDRESSABLE  ')).toBe('Celestia Dress ~UNDRESSABLE');
+    expect(shortTitle('Sorbet Set')).toBe('Sorbet Set');
+    expect(shortTitle('  Marigold Dress ~UNDRESSABLE  ')).toBe('Marigold Dress ~UNDRESSABLE');
     // 33 characters and the ellipsis: the cap counts what's shown.
-    expect(shortTitle('Cassius Lace Lingerie REMAKE ~UNDRESSABLE')).toBe('Cassius Lace Lingerie REMAKE ~UND…');
+    expect(shortTitle('Verbena Lace Lingerie REMAKE ~UNDRESSABLE')).toBe('Verbena Lace Lingerie REMAKE ~UND…');
     // Emoji are whole characters, not two halves of one.
     expect(shortTitle('Eve V10.2 ✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦✦', 12)).toBe('Eve V10.2 ✦…');
   });

@@ -33,7 +33,7 @@ afterEach(() => rm(tmp, { recursive: true, force: true }));
 
 describe('log hygiene', () => {
   it('cuts addresses down to the site and hides the home folder', () => {
-    expect(redact('Timed out loading https://www.loverslab.com/files/file/27388-lamaboy-adult-animations/?do=download&r=1')).toBe(
+    expect(redact('Timed out loading https://www.loverslab.com/files/file/27388-pineglen-adult-animations/?do=download&r=1')).toBe(
       'Timed out loading https://www.loverslab.com/…',
     );
     expect(redact('see https://wicked.cc/ and https://user:secret@example.com/a')).toBe('see https://wicked.cc/ and https://example.com/…');
