@@ -197,12 +197,17 @@ jobs:
           fi
           # An upload that stalls otherwise hangs the job for hours: GitHub's asset endpoint has
           # gone slow enough to sit on a single file for ten minutes with nothing transferred.
-          # Each attempt is capped and retried, which --clobber makes safe to repeat.
+          # Each attempt is capped at five minutes and retried, which --clobber makes safe to
+          # repeat. Five minutes is well clear of a real upload: the largest asset is ~125 MB,
+          # under three minutes even at the worst throughput measured (0.8 MB/s), so the cap only
+          # ever fires on a dead connection — and one of those is no likelier to come back at ten
+          # minutes than at five. Don't go much below this: a slow but moving transfer that gets
+          # killed starts again from zero.
           for asset in assets/*; do
             name=$(basename "$asset")
             for attempt in 1 2 3; do
               echo "Uploading $name (attempt $attempt)"
-              if timeout 600 gh release upload "$GITHUB_REF_NAME" "$asset" --clobber --repo "$GITHUB_REPOSITORY"; then
+              if timeout 300 gh release upload "$GITHUB_REF_NAME" "$asset" --clobber --repo "$GITHUB_REPOSITORY"; then
                 break
               fi
               if [ "$attempt" = 3 ]; then
