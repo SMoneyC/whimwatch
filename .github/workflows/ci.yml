@@ -51,8 +51,9 @@ jobs:
       - run: npm ci
       - run: npm test
 
-  # Builds each platform's app (without installers) and checks what's inside, so packaging problems
-  # (icons, unpacked binaries, stray files, licence notices) show up before a release is tagged.
+  # Builds each platform's app and checks what's inside, so packaging problems (icons, unpacked
+  # binaries, stray files, licence notices) show up before a release is tagged. Windows also
+  # compiles the NSIS installer — see the build step for why.
   package:
     name: Package check (${{ matrix.os }})
     needs: [checks, test]
@@ -73,7 +74,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npx electron-builder --dir --publish never
+      # Windows builds the installer rather than just the unpacked app: makensis is the only thing
+      # that ever compiles build/installer.nsh, and without this an error in it would first surface
+      # when a release is tagged — the one build nobody wants to find it in. It costs about half a
+      # minute over --dir, and the installer target packs the app on its way through, so
+      # check-package still has a win-unpacked to look at.
+      - run: npx electron-builder ${{ runner.os == 'Windows' && '--win nsis' || '--dir' }} --publish never
       - run: npm run check-package
 
   # One stable status to require in branch protection, whatever the matrix looks like.
