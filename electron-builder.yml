@@ -46,6 +46,14 @@ nsis:
   runAfterFinish: true
 portable:
   artifactName: ${productName}-${version}-portable.${ext}
+  # A fresh temp folder per launch, instead of one folder shared by every launch of this build.
+  # The portable exe deletes and re-extracts its copy every time either way, so the shared folder
+  # bought nothing — but when something holds a file open (antivirus mid-scan, a leftover process),
+  # the delete and the re-extract both skip that file and the shared folder stays incomplete. A copy
+  # missing icudtl.dat kills Chromium before any WhimWatch code runs: no window, no error, nothing in
+  # the log, and every later launch lands in the same folder and fails the same way until it's deleted
+  # by hand. With no shared path there is nothing to land in.
+  unpackDirName: false
 mac:
   category: public.app-category.utilities
   files:

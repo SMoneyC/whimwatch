@@ -139,6 +139,15 @@ Builds are not code-signed, so the first launch needs one extra step:
 - **Linux:** on Ubuntu 24.04 and later, AppImages can fail to start because of a sandbox restriction.
   Use the `.deb` instead.
 
+### What happens if the portable build does nothing (and what to do about it)
+
+The portable `.exe` unpacks itself into a folder under `%TEMP%` and runs from there. If something
+held a file open while it was unpacking — antivirus scanning it, or a previous copy still running —
+that folder can end up missing a file Windows needs, and then nothing happens at all: No window, no
+error message, and nothing in WhimWatch's own log, because it fails before any WhimWatch code runs.
+
+From version 0.2.0, each launch unpacks into its own folder, so a damaged one is never used twice. On 0.1.1 and earlier, open `%TEMP%` in File Explorer, delete the folder holding `WhimWatch.exe` (its name is a long string of letters and numbers), and run the portable `.exe` again. Or use the installer, which doesn't unpack anything.
+
 WhimWatch finds `Documents/Electronic Arts/The Sims 4/Mods` on its own. It also handles localized
 folder names, OneDrive-redirected Documents, and Steam/Proton on Linux. You can add other folders
 too.
