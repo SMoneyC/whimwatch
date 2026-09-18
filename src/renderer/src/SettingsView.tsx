@@ -11,6 +11,7 @@ import {
   Info,
   Lightbulb,
   MessageSquareWarning,
+  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
@@ -26,7 +27,7 @@ import { openIssueForm, type ReportForm } from './Feedback';
 import { type PrivacyLevel, privacyLevel, privacyLevelPatch } from '../../shared/privacy';
 import { type AppSettings, UPDATE_SITES, type UpdateSite } from '../../shared/types';
 import { Dialog, useConfirm } from './dialog';
-import { acceleratorFromKey, acceleratorKeys, formatBytes, formatDate, SOURCE_LABEL } from './format';
+import { acceleratorFromKey, acceleratorKeys, formatBytes, SOURCE_LABEL, timeAgo } from './format';
 import { useToast } from './toast';
 import { api, type AppModel } from './useApp';
 import { useSiteToggle } from './useSiteToggle';
@@ -108,7 +109,7 @@ export function SettingsView({
         {section === 'accounts' && <Accounts snapshot={snapshot} app={app} onPrivacy={() => onSection('privacy')} />}
         {section === 'updates' && <Updates snapshot={snapshot} app={app} set={set} />}
         {section === 'storage' && <Storage snapshot={snapshot} app={app} />}
-        {section === 'about' && <About snapshot={snapshot} app={app} onReport={onReport} />}
+        {section === 'about' && <About app={app} onReport={onReport} />}
       </main>
     </div>
   );
@@ -560,10 +561,50 @@ function Storage({ snapshot, app }: { snapshot: AppSnapshot; app: AppModel }) {
   );
 }
 
-function About({ snapshot, app, onReport }: { snapshot: AppSnapshot; app: AppModel; onReport: (form: ReportForm) => void }) {
+/**
+ * The version, and a way to ask about a newer one now. An answer either way:
+ * a button that shows nothing when you're up to date reads as broken.
+ */
+function VersionRow({ app }: { app: AppModel }) {
+  const snapshot = app.snapshot!;
+  const [checking, setChecking] = useState(false);
+  const update = snapshot.appUpdate;
+
+  const check = async (): Promise<void> => {
+    setChecking(true);
+    await app.run(() => api.checkAppUpdate());
+    setChecking(false);
+  };
+
+  const hint = checking
+    ? 'Asking GitHub for the latest release…'
+    : update
+      ? `Out of date. WhimWatch ${update.version} is the latest${update.hidden ? ', and you hid the notice about it' : ''}.`
+      : snapshot.appUpdateCheckedAt !== undefined
+        ? `You're on the latest version. Checked ${timeAgo(snapshot.appUpdateCheckedAt)}.`
+        : 'Not checked for a newer version yet.';
+
+  return (
+    <SettingRow title={`Version ${snapshot.appVersion}`} hint={hint}>
+      {update ? (
+        <Button size="sm" variant="primary" icon={Download} onClick={() => app.run(() => api.openExternal(update.url))}>
+          Update to {update.version}
+        </Button>
+      ) : (
+        <Button size="sm" icon={RefreshCw} onClick={check} disabled={checking}>
+          {checking ? 'Checking…' : 'Check for updates'}
+        </Button>
+      )}
+      <Button size="sm" icon={CodeXml} onClick={() => app.run(() => api.openExternal(repoUrl()))}>
+        Source code
+      </Button>
+    </SettingRow>
+  );
+}
+
+function About({ app, onReport }: { app: AppModel; onReport: (form: ReportForm) => void }) {
   const [diagnostics, setDiagnostics] = useState<string>();
   const [licenses, setLicenses] = useState<string>();
-  const result = snapshot.lastResult;
   return (
     <>
       <PageHead title="Help & about" text="Links open on GitHub in your browser (in a private window, if you chose that for links)." />
@@ -602,11 +643,7 @@ function About({ snapshot, app, onReport }: { snapshot: AppSnapshot; app: AppMod
         </SettingRow>
       </Group>
       <Group label="WhimWatch">
-        <SettingRow title={`Version ${snapshot.appVersion}`} hint={result ? `Last check ${formatDate(result.finishedAt)}` : 'Not checked yet'}>
-          <Button size="sm" icon={CodeXml} onClick={() => app.run(() => api.openExternal(repoUrl()))}>
-            Source code
-          </Button>
-        </SettingRow>
+        <VersionRow app={app} />
         <SettingRow title="Support WhimWatch" hint="WhimWatch is free and open source. If it saves you time, you can buy the developer a coffee.">
           <Button
             size="sm"

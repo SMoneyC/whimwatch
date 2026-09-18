@@ -50,24 +50,38 @@ export function Header({
         <span>WhimWatch</span>
       </button>
 
-      {snapshot.appUpdate && (
-        <span className="chip">
-          <button type="button" className="chip-main" onClick={() => app.run(() => api.openExternal(snapshot.appUpdate!.url))}>
-            <Sparkles size={14} aria-hidden="true" /> WhimWatch {snapshot.appUpdate.version} is out
+      {/* The only prompt anyone gets to update WhimWatch itself, so it carries the accent rather
+          than reading as another grey status label. It names WhimWatch because everything else in
+          this window is about updating mods — "Update to 0.2.0" alone would read as one of those —
+          and says "update" rather than "get" so it's clear the installed version is the older one.
+          The current version is in the tooltip rather than the chip, which has a header to fit in. */}
+      {snapshot.appUpdate && !snapshot.appUpdate.hidden && (
+        <span className="chip chip-accent">
+          <button
+            type="button"
+            className="chip-main"
+            title={`You have WhimWatch ${snapshot.appVersion}. Version ${snapshot.appUpdate.version} is out — opens the download page.`}
+            onClick={() => app.run(() => api.openExternal(snapshot.appUpdate!.url))}
+          >
+            <Sparkles size={14} aria-hidden="true" />
+            <span className="chip-text">Update WhimWatch to {snapshot.appUpdate.version}</span>
           </button>
           <IconButton label="Hide this update notice" icon={X} size={13} onClick={() => app.run(() => api.dismissAppUpdate(snapshot.appUpdate!.version))} />
         </span>
       )}
       {batch?.running && (
         <button type="button" className="chip chip-main chip-accent" onClick={onShowBatch}>
-          <Spinner size={14} /> Updating {Math.min(finished + 1, batch.items.length)} of {batch.items.length}
+          <Spinner size={14} />
+          <span className="chip-text">
+            Updating {Math.min(finished + 1, batch.items.length)} of {batch.items.length}
+          </span>
         </button>
       )}
 
       <span className="spacer" />
 
       {view === 'home' && (
-        <label className="search">
+        <label className="search collapsible" title="Search creators or files (/)">
           <Search size={15} aria-hidden="true" />
           <input
             ref={searchRef}

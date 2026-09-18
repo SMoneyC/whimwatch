@@ -89,8 +89,13 @@ export interface AppSnapshot {
   batch?: BatchState;
   /** Outcome of the last check when it didn't complete (cancelled or failed). */
   checkMessage?: { tone: 'info' | 'error'; text: string };
-  /** A newer WhimWatch release on GitHub. */
-  appUpdate?: { version: string; url: string };
+  /**
+   * A newer WhimWatch release on GitHub. `hidden` means the user waved this version away: the
+   * header chip stays down, but Settings still has to say you're behind rather than up to date.
+   */
+  appUpdate?: { version: string; url: string; hidden?: boolean };
+  /** When GitHub was last asked. With no `appUpdate`, that check found nothing newer. */
+  appUpdateCheckedAt?: number;
   /** Ids of game warnings the user hid. */
   dismissedGameWarnings: string[];
   /** The LoversLab/Patreon browsers keep nothing on disk this session. */
@@ -186,8 +191,16 @@ export interface WhimWatchApi {
   dismissFirstCheckNotice(): Promise<AppSnapshot>;
   dismissAppUpdate(version: string): Promise<AppSnapshot>;
   /**
-   * Marks one creator's (or WickedWhims') update as seen. With `listingUrl`,
-   * only up to that source's date, so a newer post elsewhere still shows.
+   * Asks GitHub for the latest release now, whatever the once-a-day gate and
+   * the "tell me about new versions" setting say. Throws if GitHub can't be
+   * reached; the answer is in the snapshot's `appUpdate`/`appUpdateCheckedAt`.
+   */
+  checkAppUpdate(): Promise<AppSnapshot>;
+  /**
+   * Marks one creator's (or WickedWhims') update as seen. With `listingUrl` for a page that names a
+   * pack, only that pack is marked, so neither a newer post elsewhere nor an older pack of theirs
+   * that is behind gets hidden with it. For a page that names no pack, the creator's whole update is
+   * marked up to that page's date, as before.
    */
   markSeen(key: string, listingUrl?: string): Promise<AppSnapshot>;
   /** Hides a game warning until the game version changes. */
@@ -266,6 +279,7 @@ export const API_METHODS = [
   'markSeen',
   'dismissGameWarning',
   'dismissAppUpdate',
+  'checkAppUpdate',
   'addLink',
   'rejectLink',
   'undoRejectLink',

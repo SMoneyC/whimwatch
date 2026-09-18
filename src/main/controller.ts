@@ -245,10 +245,11 @@ export class AppController {
       backupRoot: this.backupRoot,
       batch: this.batch,
       checkMessage: this.checkMessage,
-      appUpdate:
-        isNewerRelease(s.appRelease, app.getVersion()) && s.appRelease?.version !== s.dismissedAppVersion
-          ? { version: s.appRelease.version, url: s.appRelease.url }
-          : undefined,
+      appUpdate: isNewerRelease(s.appRelease, app.getVersion())
+        ? { version: s.appRelease!.version, url: s.appRelease!.url, hidden: s.appRelease!.version === s.dismissedAppVersion || undefined }
+        : undefined,
+      // With no appUpdate beside it, this is when WhimWatch last found nothing newer.
+      appUpdateCheckedAt: s.appRelease?.checkedAt,
       dismissedGameWarnings: s.dismissedGameWarnings,
       sessionsInMemory: !siteSessionsPersist(),
       weakCookieStorage: this.weakCookieStorage,
@@ -270,17 +271,29 @@ export class AppController {
     return this.state;
   }
 
-  /** Looks for a newer WhimWatch release at most once a day. */
-  async checkAppUpdate(): Promise<void> {
-    if (!this.state.settings.checkAppUpdates) return;
+  /**
+   * Looks for a newer WhimWatch release: on launch at most once a day, and
+   * whenever the user asks. `force` is that ask, so it ignores both the
+   * once-a-day gate and the setting — a button that quietly does nothing for
+   * 24 hours, or because a setting they didn't come here to change is off, is
+   * the failure this release spent its time removing. It also reports a
+   * failure rather than swallowing it, and un-hides a version waved away
+   * earlier: asking again is asking about whatever is out there now. The
+   * automatic check stays off when the setting is off.
+   */
+  async checkAppUpdate(force = false): Promise<AppSnapshot> {
     const last = this.state.appRelease?.checkedAt ?? 0;
-    if (Date.now() - last < 24 * 60 * 60 * 1000) return;
+    if (!force && (!this.state.settings.checkAppUpdates || Date.now() - last < 24 * 60 * 60 * 1000)) return this.snapshot();
     try {
       const release = await latestRelease(REPO_SLUG);
       this.state.appRelease = release ? { ...release, checkedAt: Date.now() } : { version: '0', url: '', checkedAt: Date.now() };
-      await this.commit();
+      if (force) this.state.dismissedAppVersion = undefined;
+      return await this.commit();
     } catch (err) {
-      console.warn('App update check failed:', (err as Error).message);
+      const message = (err as Error).message;
+      if (force) throw new Error(`Couldn't ask GitHub for the latest version: ${message}`, { cause: err });
+      console.warn('App update check failed:', message);
+      return this.snapshot();
     }
   }
 

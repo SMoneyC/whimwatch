@@ -22,6 +22,8 @@ export function registerIpc(controller: AppController, updater: Updater, isTrust
     undoSeen: (id) => controller.undoSeen(id),
     dismissFirstCheckNotice: () => controller.dismissFirstCheckNotice(),
     dismissAppUpdate: (version) => controller.dismissAppUpdate(version),
+    // The user asked, so the once-a-day gate and the setting don't apply.
+    checkAppUpdate: () => controller.checkAppUpdate(true),
     markSeen: (key, listingUrl) => controller.markSeen(typeof key === 'string' ? key : '', typeof listingUrl === 'string' ? listingUrl : undefined),
     dismissGameWarning: (id) => controller.dismissGameWarning(id),
     addLink: (key, url) => controller.addLink(key, url),
