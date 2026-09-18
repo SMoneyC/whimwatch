@@ -36,13 +36,21 @@ win:
       arch: [x64]
     - target: portable
       arch: [x64]
-# One click: installs for the current user (no administrator prompt), adds a Start menu entry and opens
-# the app. No desktop shortcut, so nothing extra appears on a shared computer's desktop.
+# Installs for the current user (no administrator prompt) and adds a Start menu entry. The finish
+# page offers "Run WhimWatch now" (ticked) and "Create a desktop shortcut" (not ticked) — see
+# build/installer.nsh, which also creates the Start menu entry the template can miss.
+#
+# Not oneClick: a one-click NSIS installer has no finish page by design, so it closed in silence and
+# left no way to tell whether it had worked. The extra page is the confirmation. Everything else is
+# still decided for the user: no license page, no install-mode page, no directory page.
 nsis:
   artifactName: ${productName}-Setup-${version}.${ext}
-  oneClick: true
+  oneClick: false
+  allowToChangeInstallationDirectory: false
   perMachine: false
+  # Never made automatically; only the finish-page checkbox makes one.
   createDesktopShortcut: false
+  # Ticks "Run WhimWatch now" by default.
   runAfterFinish: true
 portable:
   artifactName: ${productName}-${version}-portable.${ext}
