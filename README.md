@@ -48,8 +48,9 @@ Stay Wicked.
 
 ## What WhimWatch Does
 
-- **Finds your packs automatically.** Every WickedWhims animation or CAS package names its creator
-  inside the file (`animation_author` in its tuning), so file names don't matter.
+- **Finds your packs automatically.** WickedWhims animation packages name their creator inside the
+  file (`animation_author` in its tuning), and many CAS packages do too. The clothing, body and
+  object packages that don't are matched by file name instead.
 - **Finds where each creator publishes.** It uses the creator list on the
   [WickedWhims download page](https://wickedwhimsmod.com/download), then wicked.cc, then Patreon links
   on those pages. A small [community list](catalog/overrides.json) covers everyone else, and you can
