@@ -3,6 +3,86 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-09-18
+
+### Added
+
+- Settings → Help & about now has **Check for updates** next to the version, for asking right away
+  instead of waiting for the once-a-day check. It answers either way: the version it found, or that
+  you're on the latest one and when it looked. It works even with *Tell me when a new WhimWatch
+  version is out* switched off — that setting still governs the automatic check.
+- A pack you don't have is no longer treated as an update. Creators on wicked.cc post a page per
+  pack, and the newest one is often something you never had — WhimWatch said *Update ready*, and
+  clicking Update downloaded it only to find nothing to install. Those pages are now told apart from
+  the ones matching your files, and left out of the creator's status, of **Update all**, and of
+  automatic installs.
+- Each creator now lists their packs you don't have, with **Get it** to download one, a link to open
+  the page, and *Not interested* to never hear about one again. Turn it off with **Show packs you
+  don't have** in Settings → General to keep WhimWatch to the packs you already have.
+- WhimWatch only says a page is one you don't have when nothing of yours is named after it. Where
+  it can't tell, the page is still checked for updates exactly as before.
+- History calls one of these **Added** rather than "Updated", since nothing of yours was replaced.
+- A long list of files that aren't in a download is folded away in the update window instead of
+  pushing everything else off screen.
+
+### Changed
+
+- The "a new WhimWatch is out" notice in the header now stands out from the grey status labels
+  around it, and says plainly that your copy is behind: **Update WhimWatch to 0.2.0**, rather than
+  "WhimWatch 0.2.0 is out". Hovering it shows which version you're on.
+
+### Fixed
+
+- Creators now get credit for their clothing, body and object packages, not just their animations.
+  Those files carry no author information inside them, so WhimWatch went by file name as well: a
+  creator known from an animation pack also gets the files named after them. On the developer's own
+  install that moved 102 files out of "other files" and onto the creators who made them — one creator
+  went from 4 files to 20 — which is what WhimWatch compares against a download page's date, so
+  fewer creators now look out of date when they aren't.
+- Updates for those creators install over the file you already have instead of dropping a second
+  copy in your Mods folder.
+- A download page whose version is a long line of text — LoversLab hands back things like
+  "80_updated_1016_anims - 03/19/25" — no longer paints over the site's name and page title. The
+  version now sits on its own line and is shortened to fit; the date and the page stay readable.
+- The top bar no longer runs off the edge when the window is narrow. Search folds down to just its
+  magnifier below 960px wide — click it or press `/` to open the box, and it stays open while you
+  have a search in progress — and below 800px History keeps its icon without the word. Nothing is
+  removed, and the notice about a new WhimWatch version keeps its full wording at every size.
+- An update to one of a creator's packs no longer goes unnoticed because you installed a different
+  pack of theirs more recently. WhimWatch used to compare a creator's newest page against your
+  newest file from them, so getting one pack could hide a pending update to another — sometimes for
+  years. Where a page names the pack it's for, it's now compared against your files from that pack.
+- Clicking **Update** downloads the pack that's actually behind, instead of the creator's newest
+  page (which was often one you already had, so the download turned out to contain nothing).
+- A row now says **Update posted 3 days ago** rather than "New release 3 days ago", since what
+  needs updating is often an older pack you never caught up with, and *Most out of date* sorting
+  measures how far behind the furthest-behind pack is.
+- The portable Windows build no longer fails silently forever once its unpacked copy is damaged.
+  It used to unpack into one folder shared by every launch; if a file was held open while it
+  unpacked, that folder stayed incomplete and every later launch started nothing at all — no
+  window, no error, nothing in the log. Each launch now unpacks into its own folder. The README
+  says what to do if you hit this on 0.1.1 or earlier.
+- Installing an update now clears it straight away. It used to keep saying *Update ready* for that
+  pack until the next full check, and clicking Update again just re-downloaded the same files.
+- Marking one pack as seen no longer hides a different pack of the same creator that is genuinely
+  behind — including when **Update all** marks one automatically after finding the files identical.
+- The row's Update button and the download now agree on which page to fetch, so a creator can no
+  longer offer *Update* and then quietly do nothing.
+- Settings says **Out of date** when a new WhimWatch is out and you hid the header notice, instead
+  of "You're on the latest version".
+- After a download turns out to contain nothing new, the "newer elsewhere" note only points at
+  packs that are themselves behind — never at one you own and are up to date on.
+- The Windows installer now tells you it finished. It used to close in silence whether or not
+  anything had worked, because a one-click installer has no finish page at all. There's now a last
+  page with **Run WhimWatch now** (ticked) and **Create a desktop shortcut** (not ticked, so nothing
+  appears on a shared computer's desktop unless you ask). There's still nothing to fill in: it
+  installs, you click Finish.
+- It also always creates the Start menu entry. Reinstalling used to create no shortcut at all if
+  you'd ever deleted the old one, which left a successful install with nothing to show for itself —
+  and cost you WhimWatch's update notifications, which Windows ties to that entry.
+- Uninstalling removes a desktop shortcut you asked for, and still offers to remove your settings,
+  sign-ins and backups.
+
 ## [0.1.1] - 2026-09-17
 
 ### Fixed
