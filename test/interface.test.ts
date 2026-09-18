@@ -70,7 +70,9 @@ describe('creator rows', () => {
 
   it('say when, not two dates to compare', () => {
     const ago = (t: number): string => timeAgo(t, NOW);
-    expect(rowSummary(creator('A', 'update-available', [remote('wickedcc')]), ago)).toBe('New release 3 days ago');
+    // "Update posted", not "New release": the page needing one is often an older pack you never
+    // caught up with, and calling a 2024 release "new" would read as a bug.
+    expect(rowSummary(creator('A', 'update-available', [remote('wickedcc')]), ago)).toBe('Update posted 3 days ago');
     const seen = creator('B', 'up-to-date', [remote('wickedcc')], { dismissedAt: NOW - 3 * DAY });
     expect(rowSummary(seen, ago)).toBe('Marked as seen');
     expect(rowSummary(creator('C', 'needs-verification', [remote('loverslab', { status: 'needs-verification' })]), ago)).toBe('LoversLab wants a human check');

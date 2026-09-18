@@ -1327,6 +1327,34 @@ button.chip {
   border-style: dashed;
 }
 
+/* A pack the user doesn't have: set apart from their own pages, never a status colour. */
+.source-card.new-pack {
+  background: var(--raised);
+}
+
+.source-card.new-pack .site-badge {
+  background: var(--surface);
+}
+
+/* The title here is the pack's name, not a site's, so it has to be kept to one line. */
+.source-card.new-pack .source-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-card.new-pack .source-sub {
+  font-style: normal;
+}
+
+.new-packs-tag {
+  gap: 4px;
+  margin-right: 7px;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
 .site-badge {
   display: grid;
   place-items: center;

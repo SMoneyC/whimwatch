@@ -265,7 +265,7 @@ export function Home({
               )}
             </div>
             {visible.length > 0 ? (
-              <CreatorList rows={visible} app={app} onUpdate={(c) => onUpdate({ key: c.key, name: c.name })} />
+              <CreatorList rows={visible} app={app} onUpdate={onUpdate} />
             ) : query.trim() ? (
               <div className="empty card">
                 <p>No creators or files match "{query.trim()}"{filter !== 'all' ? ' here' : ''}.</p>

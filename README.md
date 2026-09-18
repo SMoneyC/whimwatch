@@ -105,10 +105,18 @@ WhimWatch doesn't need an account to check for updates, and it never uploads any
 | LoversLab | File version and "updated" date | Yes |
 | Patreon | Title and date of the newest release-like post (including patrons-only posts) | Yes, and your tier must include the post |
 
-Packages don't carry version numbers, so the **installed version is the date of the newest file you
-have from that creator**. When a source is more than a day newer than that, the creator shows
-*Update ready*. Use **Mark as seen** if a page changed without a real update. If a download matches
-your files but another site was updated later, the update window names that site so you can look there.
+Packages don't carry version numbers, so a file's date stands for the version you have. WhimWatch
+works out whose file is whose from the author written inside animation packages, and from file names
+for the CC packages that carry no author. Where a page names the pack it is for, it is compared
+against **your files from that pack** — so an update to one of a creator's packs still shows when
+you've installed something newer of theirs since. Where a page names no pack in particular, it is
+compared against your newest file from that creator. Either way, more than a day newer means
+*Update ready*, and the update downloads from the page that is actually behind. Use **Mark as seen**
+if a page changed without a real update. If a download matches your files but another site was updated
+later, the update window names that site so you can look there.
+
+Packs of theirs you don't have are listed under the creator with a button to get one, and are never
+counted as updates. Turn that off with **Show packs you don't have** in Settings → General.
 
 On the first check, packs you installed by hand may show as updates because their files are older
 than the page. The home screen explains this once and offers **Mark all as seen** to start fresh;
@@ -241,8 +249,17 @@ Windows, FileVault on macOS, LUKS on Linux) and a password on your user account.
 
 ## Limitations
 
-- Updates are tracked per creator, not per file. A new pack from a creator counts as an update even
-  if you only use some of their packs.
+- A page that names no particular pack — "someone's animations for WickedWhims", or a Patreon post
+  covering everything a creator just released — is dated against your newest file from that creator,
+  because nothing in its name says which of your files came from it. Installing from that page
+  through WhimWatch keeps that honest: your files are stamped with the day you installed, so
+  anything the creator posts afterwards still shows. It only goes wrong if files from that creator
+  arrive another way — installed by hand, or from a second site — and are newer than an update on
+  that page you haven't taken yet.
+- Sorting a creator's pages into "packs you have" and "packs you don't" is wicked.cc only, because
+  that is the one site where a creator has a page per pack. WhimWatch follows a single LoversLab or
+  Patreon entry per creator — whichever release they posted most recently — so judging that entry by
+  its name would mute the whole site for them rather than set one pack aside.
 - Patreon posts are matched by title ("Animations", "Update", "v1.2"…). A release with an unusual
   title may be missed; polls and previews are ignored.
 - Replacement is by file name. If a creator renames a pack between versions, the old file stays unless you

@@ -29,6 +29,8 @@ export interface AppSettings {
   privacyScreen: boolean;
   /** Show "LoversLab page" instead of post and page titles, which can be explicit. */
   hidePageTitles: boolean;
+  /** List each creator's pages for packs you don't have. They are never counted as updates either way. */
+  showNewPacks: boolean;
   /** A system-wide shortcut that hides and shows the window. */
   quickHide: boolean;
   /** Electron accelerator for quick hide, e.g. "CommandOrControl+Shift+H". */
@@ -80,6 +82,23 @@ export interface RemoteInfo {
   title?: string;
   /** Patreon: newest release-like post is not viewable with the current session. */
   locked?: boolean;
+  /**
+   * Whether the user's files show this pack (see core/ownership.ts). Absent
+   * means it couldn't be told, which counts as theirs: a page classified `no`
+   * is a pack they don't have, never an update.
+   */
+  owned?: 'yes' | 'no';
+  /**
+   * Date of your newest file that carries this page's name, when any do. It is what the page's
+   * date is compared against, so an update to one pack isn't hidden by a newer file from another.
+   * Absent means nothing of yours matched the name, and the creator's newest file is used instead.
+   */
+  yoursAt?: number;
+  /**
+   * This page on its own was marked as seen at this date. Per page rather than per creator, so
+   * saying "seen" about one pack can't bury a different pack of theirs that is genuinely behind.
+   */
+  seenAt?: number;
   /** Direct download page/link when the source exposes one. */
   downloadUrl?: string;
   /** Size of the downloadable file when known (wicked.cc zips). */
@@ -103,6 +122,11 @@ export interface CreatorResult {
   localUpdatedAt: number;
   remotes: RemoteInfo[];
   remoteUpdatedAt?: number;
+  /**
+   * How far behind the furthest-behind pack is, in ms. Measured per pack against the files that
+   * came from it, so it stays meaningful when only one of a creator's packs needs updating.
+   */
+  behindBy?: number;
   status: CreatorStatus;
   /** Remote date the user marked as seen. */
   dismissedAt?: number;
@@ -182,6 +206,8 @@ export interface SeenEvent {
   entries: {
     key: string;
     name: string;
+    /** One page of the creator's, when the mark was about that pack rather than all of them. */
+    page?: string;
     /** The date marked as seen. */
     dismissedAt: number;
     /** What was marked as seen before, restored by undo. */

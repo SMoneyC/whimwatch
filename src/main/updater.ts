@@ -12,7 +12,7 @@ import { chooseRemote } from '../core/source-choice.js';
 import type { AppSnapshot, BatchState, StorageInfo, UpdateChoice, UpdatePlan, UpdateStage } from '../shared/api.js';
 import { SOURCE_LABEL } from '../shared/labels.js';
 import type { CheckResult, LocalFile, RemoteInfo } from '../shared/types.js';
-import { laterSources, laterSourcesText, updatableRemotes } from '../shared/updatable.js';
+import { laterSources, laterSourcesText, updatableRemotes, updateSources } from '../shared/updatable.js';
 import { sessionsToClear, siteSession } from './browser.js';
 import type { AppController } from './controller.js';
 import { downloadForRemote, type Offer, offerFileCount, resolveOffer } from './downloads.js';
@@ -23,6 +23,8 @@ interface UpdateTarget {
   name: string;
   files: LocalFile[];
   remotes: RemoteInfo[];
+  /** Where an update downloads from unless a page is named: the pages that are behind. */
+  updateFrom?: RemoteInfo[];
   /** WickedWhims itself always comes from its wicked.cc page. */
   fixedRemote?: RemoteInfo;
 }
@@ -99,7 +101,8 @@ export class Updater {
     const requested = Array.isArray(keys) ? keys.filter((k): k is string => typeof k === 'string') : [];
     const items = requested.flatMap((key) => {
       const target = this.target(key);
-      const likely = target?.fixedRemote ?? (target && updatableRemotes(target.remotes, this.signedIn(opts))[0]);
+      // Same source the plan will choose: "Update all" never reaches for a pack they don't have.
+      const likely = target?.fixedRemote ?? (target && updatableRemotes(target.updateFrom ?? [], this.signedIn(opts))[0]);
       return target && likely ? [{ key, name: target.name, source: SOURCE_LABEL[likely.listing.source] }] : [];
     });
     if (!items.length) return undefined;
@@ -219,7 +222,7 @@ export class Updater {
       const remote =
         target?.fixedRemote ??
         (target &&
-          (await chooseRemote(target.remotes, {
+          (await chooseRemote(listingUrl ? target.remotes : (target.updateFrom ?? []), {
             signedIn: (site) => this.controller.isSignedIn(site),
             publicOnly: opts.publicOnly,
             listingUrl,
@@ -355,7 +358,14 @@ export class Updater {
       };
     }
     const creator = result.creators.find((c) => c.key === key);
-    return creator && { name: creator.name, files: creator.files, remotes: creator.remotes };
+    return (
+      creator && {
+        name: creator.name,
+        files: creator.files,
+        remotes: creator.remotes,
+        updateFrom: updateSources(creator.remotes, creator.localUpdatedAt, creator.dismissedAt),
+      }
+    );
   }
 
   private progressFor(creatorKey: string) {

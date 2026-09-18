@@ -15,6 +15,7 @@ import { creatorStatus, isNewer } from './compare.js';
 import { type CreatorGroup, groupByCreator, matchName, normalizeName } from './creators.js';
 import { BrowserUnavailableError, CancelledError, type Fetcher, throwIfCancelled, VerificationRequiredError } from './fetcher.js';
 import { readGameInfo } from './game.js';
+import { classifyRemotes, datePacks } from './ownership.js';
 import { BUNDLED_OVERRIDES, type Overrides } from './overrides.js';
 import { type ScanCache, scanDirs } from './scanner.js';
 import { checkLoversLab } from './sources/loverslab.js';
@@ -31,6 +32,8 @@ const CREATOR_CONCURRENCY = 6;
 export interface CreatorLinkPrefs {
   rejected: string[];
   manual: string[];
+  /** Pages marked as seen on their own, by link key — see RemoteInfo.seenAt. */
+  seen?: Record<string, number>;
   /** Sites not to check for this creator, on top of the ones turned off for everyone. */
   mutedSources?: UpdateSite[];
 }
@@ -157,7 +160,7 @@ export async function runCheck(opts: CheckOptions): Promise<CheckOutput> {
       }
       progress('check', ++checked, totalListings(), `${plan.group.name}: ${listing.source}`);
     }
-    const creator = toCreatorResult(plan.group, remotes, opts.dismissed?.[plan.group.key]);
+    const creator = toCreatorResult(plan.group, remotes, opts.dismissed?.[plan.group.key], plan.prefs.seen);
     const mutedSources = UPDATE_SITES.filter((site) => plan.mutedFound.has(site));
     if (mutedSources.length) creator.mutedSources = mutedSources;
     opts.onCreator?.(creator);
@@ -182,9 +185,12 @@ export function unrecognizedFiles(files: LocalFile[], groups: CreatorGroup[]): L
   return files.filter((f) => f.kind !== 'ww-core' && !grouped.has(f));
 }
 
-export function toCreatorResult(group: CreatorGroup, remotes: RemoteInfo[], dismissedAt?: number): CreatorResult {
+export function toCreatorResult(group: CreatorGroup, found: RemoteInfo[], dismissedAt?: number, seen?: Record<string, number>): CreatorResult {
   const localUpdatedAt = Math.max(...group.files.map((f) => f.mtimeMs));
-  const { status, remoteUpdatedAt } = creatorStatus(localUpdatedAt, remotes, dismissedAt);
+  // Pages for packs the user doesn't have are marked here, where their files and pages are both in
+  // hand, and are left out of the status by creatorStatus: a new pack is not an update.
+  const remotes = markSeenPages(datePacks(group, classifyRemotes(group, found)), seen);
+  const { status, remoteUpdatedAt, behindBy } = creatorStatus(localUpdatedAt, remotes, dismissedAt);
   return {
     key: group.key,
     name: group.name,
@@ -192,9 +198,19 @@ export function toCreatorResult(group: CreatorGroup, remotes: RemoteInfo[], dism
     localUpdatedAt,
     remotes,
     remoteUpdatedAt,
+    behindBy,
     status,
     dismissedAt,
   };
+}
+
+/** Copies the per-page "seen" dates onto the pages they belong to. */
+export function markSeenPages(remotes: RemoteInfo[], seen: Record<string, number> | undefined): RemoteInfo[] {
+  if (!seen || !Object.keys(seen).length) return remotes;
+  return remotes.map((r) => {
+    const at = seen[linkKey(r.listing.url)];
+    return at === undefined ? r : { ...r, seenAt: at };
+  });
 }
 
 export function coreResult(files: LocalFile[], ww: WwModPage | undefined, error: string | undefined, dismissedAt?: number): CoreResult {

@@ -17,9 +17,10 @@ import {
 } from 'electron';
 import { isNewerRelease, latestRelease } from '../core/app-update.js';
 import { dirSize, expiredBackups, hasLiveBackup, listDirNames, orphanBackupDirs, removeDir } from '../core/backups.js';
-import { CORE_KEY, coreResult, runCheck, unrecognizedFiles } from '../core/check.js';
-import { creatorStatus, isNewer, seenUpTo } from '../core/compare.js';
+import { CORE_KEY, coreResult, markSeenPages, runCheck, unrecognizedFiles } from '../core/check.js';
+import { creatorStatus, isNewer, outdatedRemotes, seenUpTo } from '../core/compare.js';
 import { groupByCreator } from '../core/creators.js';
+import { datePacks } from '../core/ownership.js';
 import { BUNDLED_OVERRIDES, loadOverrides, type Overrides } from '../core/overrides.js';
 import { filesFromCache, rescanPaths, type ScanCache, scanDirs } from '../core/scanner.js';
 import { classifyUrl, linkKey } from '../core/sources/urls.js';
@@ -56,6 +57,14 @@ import { installedBrowsers, openPrivate } from './browsers.js';
 import { recentLogLines, redact } from './log.js';
 import { openFolder, openUrl, revealFile } from './open.js';
 import { removeAfterExit } from './privacy.js';
+
+/** One "mark as seen": a whole creator, or one page of theirs. */
+interface SeenMark {
+  key: string;
+  /** A listing URL when the mark is about that pack alone. */
+  page?: string;
+  at: number;
+}
 
 export class AppController {
   readonly pool = new BrowserPool();
@@ -413,6 +422,9 @@ export class AppController {
       if (!group) continue;
       creator.files = group.files;
       creator.localUpdatedAt = Math.max(...group.files.map((f) => f.mtimeMs));
+      // yoursAt dates each page against the files that came from it, and those files just changed.
+      // Left alone it keeps the pre-install date and the page stays flagged for ever.
+      creator.remotes = datePacks(group, creator.remotes);
     }
     const core = coreResult(files, undefined, result.core.error, this.state.dismissed[CORE_KEY]);
     Object.assign(result.core, { installed: core.installed, installedFiles: core.installedFiles });
@@ -553,6 +565,7 @@ export class AppController {
       this.applyWindowSettings();
     }
     if (typeof p.hidePageTitles === 'boolean') s.hidePageTitles = p.hidePageTitles;
+    if (typeof p.showNewPacks === 'boolean') s.showNewPacks = p.showNewPacks;
     if (p.theme === 'system' || p.theme === 'dark' || p.theme === 'light') {
       s.theme = p.theme;
       this.applyTheme();
@@ -611,17 +624,32 @@ export class AppController {
   }
 
   async dismiss(key: unknown, remoteUpdatedAt: unknown): Promise<AppSnapshot> {
-    return this.applySeen('one', [[str(key), Number(remoteUpdatedAt)]]);
+    const creatorKey = str(key);
+    const creator = this.state.lastResult?.creators.find((c) => c.key === creatorKey);
+    // Each pack that's behind is marked on its own, so one of them can't bury the others; pages
+    // that name no pack of theirs are covered creator-wide, as before.
+    const marks: SeenMark[] = outdatedRemotes(creator?.remotes ?? [], creator?.localUpdatedAt ?? 0, creator?.dismissedAt).flatMap((r) =>
+      r.yoursAt !== undefined && r.updatedAt !== undefined ? [{ key: creatorKey, page: r.listing.url, at: r.updatedAt }] : [],
+    );
+    return this.applySeen('one', [...marks, { key: creatorKey, at: Number(remoteUpdatedAt) }]);
   }
 
   /** Marks updates as seen and records it for History, with what to restore on undo. */
-  private async applySeen(kind: SeenEvent['kind'], pairs: [string, number][], automatic = false): Promise<AppSnapshot> {
+  private async applySeen(kind: SeenEvent['kind'], marks: SeenMark[], automatic = false): Promise<AppSnapshot> {
     const entries: SeenEvent['entries'] = [];
-    for (const [key, at] of pairs) {
-      const previous = this.state.dismissed[key];
-      if (!Number.isFinite(at) || previous === at) continue;
-      this.state.dismissed[key] = at;
-      entries.push({ key, name: this.nameOf(key), dismissedAt: at, previous });
+    for (const { key, page, at } of marks) {
+      if (!Number.isFinite(at)) continue;
+      const seen = page ? (this.state.linkPrefs[key] ??= { rejected: [], manual: [] }).seen ?? {} : undefined;
+      const slot = page ? linkKey(page) : key;
+      const previous = seen ? seen[slot] : this.state.dismissed[key];
+      if (previous === at) continue;
+      if (seen) {
+        seen[slot] = at;
+        this.state.linkPrefs[key]!.seen = seen;
+      } else {
+        this.state.dismissed[key] = at;
+      }
+      entries.push({ key, name: this.nameOf(key), page, dismissedAt: at, previous });
     }
     if (entries.length) {
       const event: SeenEvent = { id: randomUUID(), at: Date.now(), kind, entries, automatic: automatic || undefined };
@@ -636,10 +664,13 @@ export class AppController {
     const event = this.state.seenHistory.find((e) => e.id === id);
     if (!event || event.undoneAt) throw new Error('That was already undone.');
     for (const entry of event.entries) {
-      // Only if nothing newer was marked as seen for that creator since.
-      if (this.state.dismissed[entry.key] !== entry.dismissedAt) continue;
-      if (entry.previous === undefined) delete this.state.dismissed[entry.key];
-      else this.state.dismissed[entry.key] = entry.previous;
+      const seen = entry.page ? this.state.linkPrefs[entry.key]?.seen : undefined;
+      const slot = entry.page ? linkKey(entry.page) : entry.key;
+      const store = seen ?? (entry.page ? undefined : this.state.dismissed);
+      // Only if nothing newer was marked as seen for that page (or creator) since.
+      if (!store || store[slot] !== entry.dismissedAt) continue;
+      if (entry.previous === undefined) delete store[slot];
+      else store[slot] = entry.previous;
     }
     event.undoneAt = Date.now();
     this.refreshStatuses();
@@ -681,12 +712,18 @@ export class AppController {
       at = result?.core.releasedAt;
     } else {
       const creator = result?.creators.find((c) => c.key === key);
-      const checked = listingUrl ? creator?.remotes.find((r) => r.listing.url === listingUrl)?.updatedAt : creator?.remoteUpdatedAt;
+      const page = listingUrl ? creator?.remotes.find((r) => r.listing.url === listingUrl) : undefined;
+      // A page that names one pack is marked on its own. Marking it creator-wide would bury every
+      // older pack of theirs that is genuinely behind — which is exactly what per-pack dating fixed.
+      if (page?.yoursAt !== undefined && page.updatedAt !== undefined) {
+        return this.applySeen('one', [{ key, page: page.listing.url, at: page.updatedAt }], opts.automatic);
+      }
+      const checked = page ? page.updatedAt : creator?.remoteUpdatedAt;
       if (checked !== undefined) at = seenUpTo(creator?.remotes ?? [], checked);
     }
     if (at === undefined) return this.snapshot();
     // Never un-hide something the user already dismissed at a later date.
-    return this.applySeen('one', [[key, Math.max(at, this.state.dismissed[key] ?? 0)]], opts.automatic);
+    return this.applySeen('one', [{ key, at: Math.max(at, this.state.dismissed[key] ?? 0) }], opts.automatic);
   }
 
   statusOf(key: string): CreatorStatus | undefined {
@@ -704,16 +741,19 @@ export class AppController {
   /** "Mark all as seen": typically after a first check, when older manual installs look outdated. */
   async dismissAll(): Promise<AppSnapshot> {
     const result = this.state.lastResult;
-    const pairs: [string, number][] = [];
+    const marks: SeenMark[] = [];
     for (const c of result?.creators ?? []) {
-      if (c.status === 'update-available' && c.remoteUpdatedAt !== undefined) pairs.push([c.key, c.remoteUpdatedAt]);
+      // Creator-wide is enough here: remoteUpdatedAt is the newest page that's behind, so every
+      // other page behind it is covered too.
+      if (c.status === 'update-available' && c.remoteUpdatedAt !== undefined) marks.push({ key: c.key, at: c.remoteUpdatedAt });
     }
-    if (result?.core.status === 'update-available' && result.core.releasedAt !== undefined) pairs.push([CORE_KEY, result.core.releasedAt]);
-    return this.applySeen('all', pairs);
+    if (result?.core.status === 'update-available' && result.core.releasedAt !== undefined) marks.push({ key: CORE_KEY, at: result.core.releasedAt });
+    return this.applySeen('all', marks);
   }
 
   async undismiss(key: unknown): Promise<AppSnapshot> {
     delete this.state.dismissed[str(key)];
+    delete this.state.linkPrefs[str(key)]?.seen;
     this.refreshStatuses();
     return this.commit();
   }
@@ -856,8 +896,10 @@ export class AppController {
     if (!result) return;
     for (const creator of result.creators) {
       const dismissedAt = this.state.dismissed[creator.key];
-      const { status, remoteUpdatedAt } = creatorStatus(creator.localUpdatedAt, creator.remotes, dismissedAt);
-      Object.assign(creator, { status, remoteUpdatedAt, dismissedAt });
+      // Marking one page as seen changes only that page, so re-apply them before comparing.
+      creator.remotes = markSeenPages(creator.remotes, this.state.linkPrefs[creator.key]?.seen);
+      const { status, remoteUpdatedAt, behindBy } = creatorStatus(creator.localUpdatedAt, creator.remotes, dismissedAt);
+      Object.assign(creator, { status, remoteUpdatedAt, behindBy, dismissedAt });
     }
     const core = result.core;
     if (core.installed && core.releasedAt !== undefined) {

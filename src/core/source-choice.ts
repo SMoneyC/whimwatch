@@ -1,5 +1,5 @@
 import type { RemoteInfo } from '../shared/types.js';
-import { rankRemotes, sameDay, updatableRemotes } from '../shared/updatable.js';
+import { ownedRemotes, rankRemotes, sameDay, updatableRemotes } from '../shared/updatable.js';
 import { throwIfCancelled } from './fetcher.js';
 
 export interface SourceChoiceOptions {
@@ -20,7 +20,9 @@ export interface SourceChoiceOptions {
  */
 export async function chooseRemote(remotes: RemoteInfo[], opts: SourceChoiceOptions): Promise<RemoteInfo | undefined> {
   const signedIn = (site: 'loverslab' | 'patreon'): boolean => !opts.publicOnly && opts.signedIn(site);
-  const options = updatableRemotes(remotes, signedIn);
+  // Left to itself this picks the newest page, which for a creator with a page per pack is often a
+  // pack the user doesn't have. Asking for one by name still works: that's how a new pack is got.
+  const options = updatableRemotes(opts.listingUrl ? remotes : ownedRemotes(remotes), signedIn);
   if (opts.listingUrl) return options.find((r) => r.listing.url === opts.listingUrl);
   const best = options[0];
   if (!best) return undefined;

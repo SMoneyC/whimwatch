@@ -8,6 +8,7 @@ import {
   EyeOff,
   Lock,
   LogIn,
+  PackagePlus,
   Plus,
   RotateCcw,
   ShieldCheck,
@@ -15,10 +16,12 @@ import {
 } from 'lucide-react';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { type CreatorResult, type RemoteInfo, UPDATE_SITES, type UpdateSite } from '../../shared/types';
-import { rowAction, rowStatus, rowSummary, siteList } from './eligibility';
+import { ownedRemotes } from '../../shared/updatable';
+import { gettableNewPack, newPacksFor, rowAction, rowStatus, rowSummary, siteList } from './eligibility';
 import { formatVersion } from '../../shared/version';
-import { formatShortDate, plural, remoteSummary, SOURCE_LABEL, timeAgo } from './format';
+import { formatShortDate, plural, remoteSummary, shortTitle, SOURCE_LABEL, timeAgo } from './format';
 import { useToast } from './toast';
+import type { UpdateTarget } from './UpdateDialog';
 import { api, type AppModel } from './useApp';
 import { useSiteToggle } from './useSiteToggle';
 import { Button, Checkbox, Disclosure, IconButton, MenuButton, StatusMarker } from './ui';
@@ -31,7 +34,7 @@ export interface Row {
 
 const SITE_BADGE = { wickedcc: 'wc', loverslab: 'LL', patreon: 'P', wwmod: 'WW' } as const;
 
-export function CreatorList({ rows, app, onUpdate }: { rows: Row[]; app: AppModel; onUpdate: (c: CreatorResult) => void }) {
+export function CreatorList({ rows, app, onUpdate }: { rows: Row[]; app: AppModel; onUpdate: (target: UpdateTarget) => void }) {
   const [open, setOpen] = useState<string>();
   const [addingFor, setAddingFor] = useState<string>();
   return (
@@ -49,7 +52,7 @@ export function CreatorList({ rows, app, onUpdate }: { rows: Row[]; app: AppMode
             if (on) setOpen(creator.key);
           }}
           app={app}
-          onUpdate={() => onUpdate(creator)}
+          onUpdate={onUpdate}
         />
       ))}
     </ul>
@@ -73,7 +76,7 @@ function CreatorRow({
   adding: boolean;
   onAdding: (on: boolean) => void;
   app: AppModel;
-  onUpdate: () => void;
+  onUpdate: (target: UpdateTarget) => void;
 }) {
   const snapshot = app.snapshot!;
   const status = rowStatus(c);
@@ -81,6 +84,7 @@ function CreatorRow({
   const progress = app.updates[c.key];
   const busy = progress !== undefined && progress.stage !== 'done' && progress.stage !== 'error';
   const sources = [...new Set(c.remotes.map((r) => SOURCE_LABEL[r.listing.source]))];
+  const packs = newPacksFor(c, snapshot);
 
   return (
     <li className={`creator ${expanded ? 'expanded' : ''}`}>
@@ -88,6 +92,13 @@ function CreatorRow({
         <button type="button" className="creator-toggle" aria-expanded={expanded} onClick={onToggle}>
           <span className="creator-name">{c.name}</span>
           <span className="creator-sub faint">
+            {/* Never a status marker and never the Update button: a pack you don't have isn't an
+                update. It sits on the creator's own line, where it can't be read as one. */}
+            {packs.length > 0 && !pending && (
+              <span className="tag new-packs-tag">
+                <PackagePlus size={12} aria-hidden="true" /> {plural(packs.length, 'new pack')}
+              </span>
+            )}
             {plural(c.files.length, 'file')}
             {sources.length > 0 && ` · ${sources.join(', ')}`}
           </span>
@@ -96,7 +107,7 @@ function CreatorRow({
         <StatusMarker status={status} checking={pending && app.snapshot?.running} />
         <span className="creator-action">
           {action.kind === 'update' && (
-            <Button size="sm" icon={Download} onClick={onUpdate} disabled={busy || snapshot.running}>
+            <Button size="sm" icon={Download} onClick={() => onUpdate({ key: c.key, name: c.name })} disabled={busy || snapshot.running}>
               Update
             </Button>
           )}
@@ -128,12 +139,24 @@ function CreatorRow({
         <p className={`creator-progress small ${progress.stage === 'error' ? 'error-text' : 'muted'}`}>{progress.message}</p>
       )}
 
-      {expanded && <CreatorDetails creator={c} app={app} adding={adding} onAdding={onAdding} />}
+      {expanded && <CreatorDetails creator={c} app={app} adding={adding} onAdding={onAdding} onUpdate={onUpdate} />}
     </li>
   );
 }
 
-function CreatorDetails({ creator: c, app, adding, onAdding }: { creator: CreatorResult; app: AppModel; adding: boolean; onAdding: (on: boolean) => void }) {
+function CreatorDetails({
+  creator: c,
+  app,
+  adding,
+  onAdding,
+  onUpdate,
+}: {
+  creator: CreatorResult;
+  app: AppModel;
+  adding: boolean;
+  onAdding: (on: boolean) => void;
+  onUpdate: (target: UpdateTarget) => void;
+}) {
   const snapshot = app.snapshot!;
   const hideTitles = snapshot.settings.hidePageTitles;
   const progress = app.updates[c.key];
@@ -144,6 +167,11 @@ function CreatorDetails({ creator: c, app, adding, onAdding }: { creator: Creato
   const offEverywhere = muted.filter((s) => snapshot.settings.mutedSources.includes(s));
   const offHere = snapshot.creatorMutedSources[c.key] ?? [];
   const toggleSite = useSiteToggle(app);
+  // Their pages and the ones for packs they don't have are listed apart, whether or not the second
+  // list is switched on: they need different words and different buttons.
+  const pages = ownedRemotes(c.remotes);
+  const packs = newPacksFor(c, snapshot);
+  const hiddenPacks = c.remotes.length - pages.length;
 
   return (
     <div className="creator-body">
@@ -166,13 +194,38 @@ function CreatorDetails({ creator: c, app, adding, onAdding }: { creator: Creato
       {c.remotes.length === 0 && !muted.length ? (
         <p className="muted small">No download pages found for this creator yet. Add a wicked.cc, LoversLab or Patreon page below.</p>
       ) : (
-        c.remotes.length > 0 && (
+        pages.length > 0 && (
           <div className="source-grid">
-            {c.remotes.map((r) => (
+            {pages.map((r) => (
               <SourceCard key={r.listing.url} remote={r} creator={c} app={app} hideTitle={hideTitles} />
             ))}
           </div>
         )
+      )}
+
+      {packs.length > 0 && (
+        <>
+          <div className="section-label">Packs you don't have</div>
+          <p className="muted small">
+            Nothing in your folders matches {packs.length === 1 ? 'this page' : 'these pages'}. {packs.length === 1 ? "It's" : "They're"} new content rather
+            than a newer version of something you have, so WhimWatch never counts {packs.length === 1 ? 'it' : 'them'} as an update or installs{' '}
+            {packs.length === 1 ? 'it' : 'them'} with Update all.
+          </p>
+          <div className="source-grid">
+            {packs.map((r) => (
+              <NewPackCard key={r.listing.url} remote={r} creator={c} app={app} hideTitle={hideTitles} onUpdate={onUpdate} />
+            ))}
+          </div>
+        </>
+      )}
+      {hiddenPacks > 0 && packs.length === 0 && (
+        <p className="muted small off-note">
+          <PackagePlus size={14} aria-hidden="true" />
+          <span>
+            {hiddenPacks === 1 ? '1 page is' : `${hiddenPacks} pages are`} for packs you don't have. {hiddenPacks === 1 ? "It isn't" : "They aren't"} counted as
+            updates. Turn on <em>Show packs you don't have</em> in Settings → General to list {hiddenPacks === 1 ? 'it' : 'them'}.
+          </span>
+        </p>
       )}
       {offEverywhere.length > 0 && (
         <p className="muted small off-note">
@@ -306,6 +359,85 @@ function SourceCard({ remote: r, creator, app, hideTitle }: { remote: RemoteInfo
           { label: 'Open privately or copy link…', icon: Copy, onSelect: () => void app.run(() => api.showLinkMenu(r.listing.url)) },
           ...(updateSite ? [{ label: `Don't check ${label} for ${creator.name}`, icon: BellOff, onSelect: () => void stopChecking(updateSite) }] : []),
           { label: "Not this creator's page", icon: Trash2, danger: true, onSelect: () => void remove() },
+        ]}
+      />
+    </div>
+  );
+}
+
+/**
+ * One pack the user doesn't have. Three things can be done with it and none of
+ * them is "update": get it, look at it, or never hear about it again.
+ */
+function NewPackCard({
+  remote: r,
+  creator,
+  app,
+  hideTitle,
+  onUpdate,
+}: {
+  remote: RemoteInfo;
+  creator: CreatorResult;
+  app: AppModel;
+  hideTitle: boolean;
+  onUpdate: (target: UpdateTarget) => void;
+}) {
+  const toast = useToast();
+  const snapshot = app.snapshot!;
+  const label = SOURCE_LABEL[r.listing.source];
+  const name = !r.title || hideTitle ? `${label} page` : r.title;
+  const progress = app.updates[creator.key];
+  const busy = progress !== undefined && progress.stage !== 'done' && progress.stage !== 'error';
+  // A patrons-only post would 403: offer the page, not a button that fails.
+  const gettable = gettableNewPack(r, snapshot);
+
+  const notInterested = async (): Promise<void> => {
+    const done = await app.run(() => api.rejectLink(creator.key, r.listing.url));
+    if (!done) return;
+    toast({
+      text: `WhimWatch won't mention ${hideTitle || !r.title ? 'that pack' : shortTitle(r.title, 40)} again`,
+      action: { label: 'Undo', run: () => void app.run(() => api.undoRejectLink(creator.key, r.listing.url)) },
+    });
+  };
+
+  return (
+    <div className="source-card new-pack">
+      <span className="site-badge" aria-hidden="true">
+        {SITE_BADGE[r.listing.source]}
+      </span>
+      <div className="source-text">
+        {/* The pack's own name, so nine of a creator's pages aren't nine identical cards. */}
+        <span className="source-title" title={name}>
+          {name}
+          {/* Unreachable while classifyRemotes only reads wicked.cc and `locked` is Patreon's alone.
+              Kept with `gettable` below so that extending classification to Patreon offers the page
+              rather than a download button that 403s, which is the point of both. */}
+          {r.locked && <Lock size={13} className="faint" aria-label="Patrons only" />}
+        </span>
+        {/* Date first: it's the half of this line that survives a narrow card. */}
+        <span className="source-sub faint">{formatShortDate(r.updatedAt)} · not in your folders</span>
+      </div>
+      {gettable ? (
+        <Button
+          size="sm"
+          icon={Download}
+          disabled={busy || snapshot.running}
+          onClick={() => onUpdate({ key: creator.key, name: creator.name, listingUrl: r.listing.url, packName: r.title })}
+        >
+          Get it
+        </Button>
+      ) : (
+        // Patrons-only: a download button here would only ever 403.
+        <Button size="sm" icon={ExternalLink} onClick={() => app.run(() => api.openExternal(r.listing.url))} onContextMenu={linkMenu(app, r.listing.url)}>
+          Open page
+        </Button>
+      )}
+      <MenuButton
+        label={`More for ${name}`}
+        items={[
+          ...(gettable ? [{ label: 'Open page', icon: ExternalLink, onSelect: () => void app.run(() => api.openExternal(r.listing.url)) }] : []),
+          { label: 'Open privately or copy link…', icon: Copy, onSelect: () => void app.run(() => api.showLinkMenu(r.listing.url)) },
+          { label: 'Not interested', icon: BellOff, danger: true, onSelect: () => void notInterested() },
         ]}
       />
     </div>

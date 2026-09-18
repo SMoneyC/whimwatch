@@ -46,6 +46,7 @@ export function defaultState(): AppState {
       notificationNames: false,
       privacyScreen: false,
       hidePageTitles: false,
+      showNewPacks: true,
       quickHide: false,
       quickHideShortcut: 'CommandOrControl+Shift+H',
       theme: 'dark',

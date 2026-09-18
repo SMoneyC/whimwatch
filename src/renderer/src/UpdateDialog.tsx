@@ -2,7 +2,7 @@ import { ArrowRightLeft, BellOff, CheckCircle2, Download, ExternalLink, FolderOp
 import { useEffect, useState } from 'react';
 import type { UpdatePlan } from '../../shared/api';
 import type { UpdateSite } from '../../shared/types';
-import { laterSources, newestPage } from '../../shared/updatable';
+import { laterSources, newestPage, outdatedRemotes } from '../../shared/updatable';
 import { formatVersion } from '../../shared/version';
 import { Dialog, useConfirm } from './dialog';
 import { CORE_KEY, downloadOptions } from './eligibility';
@@ -15,9 +15,16 @@ import { Banner, Button, Checkbox, Disclosure, Segmented, Spinner } from './ui';
 export interface UpdateTarget {
   key: string;
   name: string;
+  /** A page to install from. Set for a pack the user doesn't have, which is got from its own page. */
+  listingUrl?: string;
+  /** That page's name, so the dialog is about the pack rather than the creator. */
+  packName?: string;
 }
 
 const isGameWarning = (w: string): boolean => w.startsWith('The Sims 4 is running');
+
+/** Beyond this many "not in this download" files, the list is folded away rather than scrolled past. */
+const OBSOLETE_SHOWN = 6;
 
 /** Shows what an update will change, then installs it. */
 export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; app: AppModel; onClose: () => void }) {
@@ -31,13 +38,17 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
   const [installing, setInstalling] = useState(false);
   const [gameOpen, setGameOpen] = useState(false);
   const [showBackups, setShowBackups] = useState(false);
+  // A pack they don't have is got from the page they picked, and from nowhere else.
+  const newPack = target.listingUrl !== undefined;
   // Sources as they were when the dialog opened; the newest is the default.
-  const [options] = useState(() => (app.snapshot ? downloadOptions(target.key, app.snapshot) : []));
+  const [options] = useState(() => (app.snapshot ? downloadOptions(target.key, app.snapshot, target.listingUrl) : []));
   // Undefined lets the app pick (newest, then most files); the plan reports what it chose.
-  const [sourceUrl, setSourceUrl] = useState<string>();
+  const [sourceUrl, setSourceUrl] = useState<string | undefined>(target.listingUrl);
   const progress = app.updates[target.key];
   const snapshot = app.snapshot;
   const creator = snapshot?.lastResult?.creators.find((c) => c.key === target.key);
+  /** The pack's own name where the site gives one and page titles aren't hidden. */
+  const packLabel = !target.packName || snapshot?.settings.hidePageTitles ? `a pack from ${target.name}` : shortTitle(target.packName, 40);
 
   const chooseSource = (url: string): void => {
     if (url === (sourceUrl ?? plan?.downloadUrl)) return;
@@ -89,7 +100,7 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
     if (!done) return;
     const record = [...done.installs].reverse().find((i) => i.creatorKey === target.key);
     toast({
-      text: `Updated ${target.name}`,
+      text: newPack ? `Added ${packLabel}` : `Updated ${target.name}`,
       action: record ? { label: 'Undo', run: () => void app.run(() => api.undoInstall(record.id)) } : undefined,
     });
     onClose();
@@ -106,13 +117,19 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
   const chosenAdd = addFiles.filter((f) => !skip.includes(f.target)).length;
   const otherWarnings = plan?.warnings.filter((w) => !isGameWarning(w)) ?? [];
   const nothingChosen = chosenReplace + chosenAdd + remove.length === 0;
-  const later = plan?.upToDate ? laterSources(creator?.remotes ?? [], plan.downloadUrl) : [];
+  /**
+   * Only pages that are themselves behind. Ranked across every page, this named the creator's
+   * newest *other* pack — and offered to stop following a pack the user owns and is up to date on.
+   */
+  const behindPages = creator ? outdatedRemotes(creator.remotes, creator.localUpdatedAt, creator.dismissedAt) : [];
+  // Only for an update: "another page of theirs is newer" says nothing about a pack they were getting.
+  const later = plan?.upToDate && !newPack ? laterSources(behindPages, plan.downloadUrl) : [];
   /**
    * A page of theirs that's newer than the one downloaded from — named, so it can be fetched,
    * opened or dropped rather than alluded to. Not the same page: matching the newest page and still
    * counting as an update means the dates differ, not the files.
    */
-  const newest = plan?.upToDate ? newestPage(creator?.remotes ?? []) : undefined;
+  const newest = plan?.upToDate && !newPack ? newestPage(behindPages) : undefined;
   const newerElsewhere = Boolean(newest && newest.listing.url !== plan?.downloadUrl && later.length > 0);
   const newestName = !newest?.title || snapshot?.settings.hidePageTitles ? undefined : shortTitle(newest.title, 40);
   const canGetNewest = newerElsewhere && options.some((o) => o.url === newest?.listing.url);
@@ -146,14 +163,20 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
   const summary = changes.filter(([, n]) => n > 0).map(([verb, n], i) => `${verb} ${i === 0 ? plural(n, 'file') : formatCount(n)}`);
   const leftAlone = unchanged.length + (plan?.skipped.length ?? 0);
 
-  const subtitle =
-    target.key !== CORE_KEY && creator?.remoteUpdatedAt !== undefined
-      ? `New release ${timeAgo(creator.remoteUpdatedAt)} · you have files from ${formatShortDate(creator.localUpdatedAt)}`
+  const packPage = newPack ? creator?.remotes.find((r) => r.listing.url === target.listingUrl) : undefined;
+  /** The page the creator's "Update ready" is about: the one whose date the row is showing. */
+  const behindPage = creator?.remotes.find((r) => r.owned !== 'no' && r.updatedAt === creator.remoteUpdatedAt);
+  const subtitle = newPack
+    ? `From ${target.name}${packPage?.updatedAt !== undefined ? ` · posted ${formatShortDate(packPage.updatedAt)}` : ''}`
+    : target.key !== CORE_KEY && creator?.remoteUpdatedAt !== undefined
+      ? // Against the files from this pack where the page named them, not the creator's newest file:
+        // "you have files from Sep 17" under a pack you last updated in 2024 helps nobody.
+        `Update posted ${timeAgo(creator.remoteUpdatedAt)} · you have files from ${formatShortDate(behindPage?.yoursAt ?? creator.localUpdatedAt)}`
       : undefined;
 
   return (
     <Dialog
-      title={`Update ${target.name}`}
+      title={newPack ? `Get ${packLabel}` : `Update ${target.name}`}
       subtitle={subtitle}
       onClose={close}
       dismissable={!installing}
@@ -169,7 +192,12 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
           <Button variant="quiet" onClick={close} disabled={installing}>
             Cancel
           </Button>
-          {plan?.upToDate ? (
+          {plan?.upToDate && newPack ? (
+            // Nothing to mark as seen: this page was never counted as an update in the first place.
+            <Button variant="primary" onClick={close}>
+              Close
+            </Button>
+          ) : plan?.upToDate ? (
             <Button
               variant="primary"
               onClick={async () => {
@@ -184,7 +212,7 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
             </Button>
           ) : (
             <Button variant="primary" icon={gameOpen ? Gamepad2 : Download} onClick={install} disabled={!plan || installing || gameOpen || nothingChosen}>
-              {installing ? 'Installing…' : gameOpen ? 'Close the game to install' : 'Install update'}
+              {installing ? 'Installing…' : gameOpen ? 'Close the game to install' : newPack ? 'Install pack' : 'Install update'}
             </Button>
           )}
         </>
@@ -301,6 +329,12 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
               );
             })}
           </Banner>
+        ) : newPack ? (
+          // Worth saying plainly: WhimWatch put this page under "packs you don't have" and was wrong.
+          <Banner tone="ok" title="You already have this pack">
+            Every file on this page is already in your folders, byte for byte. WhimWatch listed it as a pack you don't have because nothing of yours is named
+            after it — that's a guess from names, and the download is what settles it.
+          </Banner>
         ) : (
           <Banner tone="ok" title="Nothing to install — you already have this">
             Turns out the creator's page date is different than yours, but the file itself is the same - Nothing to update after all! Mark this as seen and {target.name} will no longer prompt for updates until the next one is posted.
@@ -346,13 +380,24 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
             {[...replaceFiles, ...addFiles].map((f) => (
               <FileLine key={f.target} kind={f.kind} path={f.target} checked={!skip.includes(f.target)} onToggle={() => setSkip(toggle(skip, f.target))} />
             ))}
-            {plan.possiblyObsolete.length > 0 && (
+            {/* Not for a pack they're getting: nothing installed can be an older version of a pack
+                they never had, so every file the creator made would be listed for removal. */}
+            {!newPack && plan.possiblyObsolete.length > 0 && (
               <div className="file-section">
                 <div className="section-label">Not in this download</div>
                 <p className="muted small">Might be an older version, or an extra you got elsewhere. Tick it to remove it (it's backed up too).</p>
-                {plan.possiblyObsolete.map((path) => (
-                  <FileLine key={path} kind="remove" path={path} checked={remove.includes(path)} onToggle={() => setRemove(toggle(remove, path))} />
-                ))}
+                {plan.possiblyObsolete.length > OBSOLETE_SHOWN ? (
+                  // A creator with a page per pack has most of their files in here every time.
+                  <Disclosure summary={`Show ${formatCount(plan.possiblyObsolete.length)} files`}>
+                    {plan.possiblyObsolete.map((path) => (
+                      <FileLine key={path} kind="remove" path={path} checked={remove.includes(path)} onToggle={() => setRemove(toggle(remove, path))} />
+                    ))}
+                  </Disclosure>
+                ) : (
+                  plan.possiblyObsolete.map((path) => (
+                    <FileLine key={path} kind="remove" path={path} checked={remove.includes(path)} onToggle={() => setRemove(toggle(remove, path))} />
+                  ))
+                )}
               </div>
             )}
             {leftAlone > 0 && (

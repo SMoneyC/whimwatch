@@ -1,6 +1,6 @@
 import type { AppSnapshot, BrowserSite } from '../../shared/api';
 import type { CoreResult, CreatorResult, RemoteInfo, SourceId } from '../../shared/types';
-import { updatableRemote, updatableRemotes } from '../../shared/updatable';
+import { newPacks, ownedRemotes, updatableRemote, updatableRemotes, updateSources } from '../../shared/updatable';
 import { SOURCE_LABEL } from './format';
 
 export const CORE_KEY = '__wickedwhims__';
@@ -27,8 +27,22 @@ export const signedInCheck =
   (site) =>
     snapshot.accounts.some((a) => a.site === site && a.signedIn);
 
-export function downloadableRemote(remotes: RemoteInfo[], snapshot: AppSnapshot): RemoteInfo | undefined {
-  return updatableRemote(remotes, signedInCheck(snapshot));
+/**
+ * The page the row's Update button would download, chosen exactly as the main process chooses it —
+ * otherwise the row offers an update the download then declines to produce.
+ */
+export function downloadableRemote(c: CreatorResult, snapshot: AppSnapshot): RemoteInfo | undefined {
+  return updatableRemote(updateSources(c.remotes, c.localUpdatedAt, c.dismissedAt), signedInCheck(snapshot));
+}
+
+/** Pages for packs the user doesn't have, once they've asked to see them. */
+export function newPacksFor(c: CreatorResult, snapshot: AppSnapshot): RemoteInfo[] {
+  return snapshot.settings.showNewPacks ? newPacks(c.remotes) : [];
+}
+
+/** A new pack can be downloaded when its own page can be: locked Patreon posts can only be opened. */
+export function gettableNewPack(remote: RemoteInfo, snapshot: AppSnapshot): boolean {
+  return updatableRemotes([remote], signedInCheck(snapshot)).length > 0;
 }
 
 export interface DownloadOption {
@@ -41,8 +55,12 @@ export interface DownloadOption {
   fileCount?: number;
 }
 
-/** Sources an update can be downloaded from right now, newest (the default) first. */
-export function downloadOptions(key: string, snapshot: AppSnapshot): DownloadOption[] {
+/**
+ * Sources an update can be downloaded from right now, newest (the default)
+ * first. With `only`, just that page: getting one new pack is about that pack,
+ * and offering to swap it for another of the creator's would make no sense.
+ */
+export function downloadOptions(key: string, snapshot: AppSnapshot, only?: string): DownloadOption[] {
   const result = snapshot.lastResult;
   if (!result) return [];
   if (key === CORE_KEY) {
@@ -50,7 +68,14 @@ export function downloadOptions(key: string, snapshot: AppSnapshot): DownloadOpt
     return url?.includes('wicked.cc') ? [{ url, label: 'wicked.cc', updatedAt: result.core.releasedAt, version: result.core.latestVersion }] : [];
   }
   const creator = result.creators.find((c) => c.key === key);
-  return (creator ? updatableRemotes(creator.remotes, signedInCheck(snapshot)) : []).map((r) => ({
+  const pages = only ? (creator?.remotes ?? []).filter((r) => r.listing.url === only) : ownedRemotes(creator?.remotes ?? []);
+  // The page the update is actually about goes first, because it is the one the download will come
+  // from. Left in date order the switcher names the creator's newest pack until the plan lands, then
+  // jumps to a different one — which reads as WhimWatch fetching the wrong thing.
+  const behind = creator?.status === 'update-available' ? creator.remoteUpdatedAt : undefined;
+  const ranked = updatableRemotes(pages, signedInCheck(snapshot));
+  const ordered = behind === undefined ? ranked : [...ranked].sort((a, b) => Number(b.updatedAt === behind) - Number(a.updatedAt === behind));
+  return (creator ? ordered : []).map((r) => ({
     url: r.listing.url,
     label: SOURCE_LABEL[r.listing.source],
     // A creator can have a dozen pages on one site, where "wicked.cc" twelve times tells you nothing.
@@ -67,7 +92,7 @@ export function coreUpdatable(core: CoreResult): boolean {
 
 /** Why an available update can't be downloaded right now, and the fix when there is one. */
 function blocker(c: CreatorResult, signedIn: SignedIn): { reason: string; signIn?: BrowserSite; url?: string } {
-  const ok = c.remotes.filter((r) => r.status === 'ok');
+  const ok = updateSources(c.remotes, c.localUpdatedAt, c.dismissedAt).filter((r) => r.status === 'ok');
   const newest = [...ok].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0];
   if (ok.some((r) => r.listing.source === 'loverslab') && !signedIn('loverslab')) return { reason: 'Sign in to LoversLab', signIn: 'loverslab' };
   if (ok.some((r) => r.listing.source === 'patreon') && !signedIn('patreon')) return { reason: 'Sign in to Patreon', signIn: 'patreon' };
@@ -84,7 +109,7 @@ export function updateCandidates(core: CoreResult | undefined, creators: Creator
   const signedIn = signedInCheck(snapshot);
   for (const c of creators) {
     if (c.status !== 'update-available') continue;
-    const remote = updatableRemote(c.remotes, signedIn);
+    const remote = updatableRemote(updateSources(c.remotes, c.localUpdatedAt, c.dismissedAt), signedIn);
     if (remote) {
       eligible.push({ key: c.key, name: c.name, source: SOURCE_LABEL[remote.listing.source] });
       continue;
@@ -140,7 +165,7 @@ export type RowAction =
 export function rowAction(c: CreatorResult, snapshot: AppSnapshot): RowAction {
   const status = rowStatus(c);
   if (status === 'update') {
-    if (downloadableRemote(c.remotes, snapshot)) return { kind: 'update' };
+    if (downloadableRemote(c, snapshot)) return { kind: 'update' };
     const { signIn, url } = blocker(c, signedInCheck(snapshot));
     if (signIn) return { kind: 'sign-in', site: signIn };
     return url ? { kind: 'open', url } : { kind: 'none' };
@@ -157,7 +182,9 @@ export function rowAction(c: CreatorResult, snapshot: AppSnapshot): RowAction {
 export function rowSummary(c: CreatorResult, timeAgo: (t: number) => string): string {
   switch (rowStatus(c)) {
     case 'update':
-      return c.remoteUpdatedAt !== undefined ? `New release ${timeAgo(c.remoteUpdatedAt)}` : 'New release';
+      // Not "New release": the page that needs updating is often an older pack of theirs you simply
+      // never caught up with, and calling a 2024 release "new" reads as a bug.
+      return c.remoteUpdatedAt !== undefined ? `Update posted ${timeAgo(c.remoteUpdatedAt)}` : 'Update available';
     case 'current':
       if (c.dismissedAt !== undefined && c.remoteUpdatedAt !== undefined && c.remoteUpdatedAt > c.localUpdatedAt + 86_400_000) return 'Marked as seen';
       return c.remoteUpdatedAt !== undefined ? `Released ${timeAgo(c.remoteUpdatedAt)}` : 'Up to date';
@@ -185,7 +212,9 @@ export function sortCreators(list: CreatorResult[], order: SortOrder): CreatorRe
   return [...list].sort((a, b) => {
     if (order === 'name') return byName(a, b);
     if (order === 'outdated') {
-      const gap = (c: CreatorResult): number => (c.remoteUpdatedAt ?? 0) - c.localUpdatedAt;
+      // How far behind the furthest-behind pack is. The old creator-wide gap went negative for a
+      // creator behind on an old pack but holding a newer file from a different one.
+      const gap = (c: CreatorResult): number => c.behindBy ?? (c.remoteUpdatedAt ?? 0) - c.localUpdatedAt;
       return gap(b) - gap(a) || byName(a, b);
     }
     return (b.remoteUpdatedAt ?? 0) - (a.remoteUpdatedAt ?? 0) || byName(a, b);

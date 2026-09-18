@@ -2,6 +2,53 @@ import { formatShortDate } from './dates.js';
 import { SOURCE_LABEL } from './labels.js';
 import type { RemoteInfo, SourceId } from './types.js';
 
+/** Timezones and upload delays make same-day dates unreliable, so allow a day. */
+export const TOLERANCE_MS = 24 * 60 * 60 * 1000;
+
+export function isNewer(remote: number, local: number, seenAt?: number): boolean {
+  if (seenAt !== undefined && seenAt >= remote) return false;
+  return remote > local + TOLERANCE_MS;
+}
+
+/**
+ * The creator's pages that are newer than the files that came from them — their pending updates.
+ *
+ * A page whose name matched files of yours is compared against those files (RemoteInfo.yoursAt), so
+ * an update to one pack is no longer hidden by a newer file from a different one. A page that
+ * matched nothing of yours is compared against your newest file from the creator, as before, and a
+ * page marked as seen on its own (RemoteInfo.seenAt) is hidden without hiding the creator's others.
+ */
+export function outdatedRemotes(remotes: RemoteInfo[], localUpdatedAt: number, dismissedAt?: number): RemoteInfo[] {
+  return ownedRemotes(remotes).filter(
+    (r) => r.status === 'ok' && r.updatedAt !== undefined && isNewer(r.updatedAt, r.yoursAt ?? localUpdatedAt, r.seenAt ?? dismissedAt),
+  );
+}
+
+/**
+ * Where an update comes from when the user didn't name a page: the pages that are behind, or every
+ * page of theirs when none is. Both the row's Update button and the download must agree on this —
+ * offering an update the main process then declines to produce is worse than offering none.
+ */
+export function updateSources(remotes: RemoteInfo[], localUpdatedAt: number, dismissedAt?: number): RemoteInfo[] {
+  const behind = outdatedRemotes(remotes, localUpdatedAt, dismissedAt);
+  return behind.length ? behind : ownedRemotes(remotes);
+}
+
+/**
+ * Pages that can carry an update: packs the user has, plus every page it
+ * couldn't be told about. A pack they don't have is new content, not a newer
+ * version of anything, so it never decides a status or gets downloaded by
+ * "Update all" — only by asking for that pack by name.
+ */
+export function ownedRemotes(remotes: RemoteInfo[]): RemoteInfo[] {
+  return remotes.filter((r) => r.owned !== 'no');
+}
+
+/** The creator's pages for packs the user doesn't have, newest first. */
+export function newPacks(remotes: RemoteInfo[]): RemoteInfo[] {
+  return remotes.filter((r) => r.owned === 'no' && r.status === 'ok').sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+}
+
 /**
  * The source an update would be downloaded from: the newest successful
  * listing that offers a download the user can access (wicked.cc always;
@@ -38,7 +85,7 @@ export function sameDay(a: RemoteInfo, b: RemoteInfo): boolean {
  */
 export function newestPage(remotes: RemoteInfo[]): RemoteInfo | undefined {
   let newest: RemoteInfo | undefined;
-  for (const r of remotes) {
+  for (const r of ownedRemotes(remotes)) {
     if (r.status !== 'ok' || r.updatedAt === undefined) continue;
     if (!newest || r.updatedAt > (newest.updatedAt ?? 0)) newest = r;
   }
@@ -54,7 +101,7 @@ export function laterSources(remotes: RemoteInfo[], listingUrl: string): RemoteI
   const checked = remotes.find((r) => r.listing.url === listingUrl)?.updatedAt;
   if (checked === undefined) return [];
   const newest = new Map<SourceId, RemoteInfo & { updatedAt: number }>();
-  for (const r of remotes) {
+  for (const r of ownedRemotes(remotes)) {
     if (r.status !== 'ok' || r.updatedAt === undefined || r.updatedAt <= checked + DAY_MS) continue;
     const kept = newest.get(r.listing.source);
     if (!kept || r.updatedAt > kept.updatedAt) newest.set(r.listing.source, { ...r, updatedAt: r.updatedAt });

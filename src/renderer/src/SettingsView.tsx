@@ -203,6 +203,12 @@ function General({ snapshot, app, set }: { snapshot: AppSnapshot; app: AppModel;
           checked={settings.checkAppUpdates}
           onChange={(v) => set({ checkAppUpdates: v })}
         />
+        <ToggleRow
+          title="Show packs you don't have"
+          hint="Creators on wicked.cc post a page per pack. The ones you don't have are listed under the creator with a button to get one, and are never counted as updates. Turn this off to keep WhimWatch to the packs you already have."
+          checked={settings.showNewPacks}
+          onChange={(v) => set({ showNewPacks: v })}
+        />
       </Group>
       <Group label="Sites to check">
         <div className="setting-row">
