@@ -114,6 +114,12 @@ if (process.argv.includes('--smoke')) {
     controller.applyTheme();
     mainWindow = createWindow();
     controller.attachWindow(mainWindow);
+    // The pool's hidden scraper windows are still windows, so window-all-closed doesn't fire while
+    // one is cached — and nothing reaps them when a check succeeds, only when it's cancelled. That
+    // left WhimWatch running with nothing on screen after a check, holding the single-instance lock
+    // so it couldn't be started again: the report was having to end it in Task Manager to run the
+    // next version. Closing the main window is the quit signal; quick hide uses hide(), not close.
+    mainWindow.on('closed', () => app.quit());
     try {
       controller.applyQuickHide();
     } catch (err) {
