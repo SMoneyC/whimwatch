@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,9 +53,9 @@ import {
 import { SOURCE_LABEL } from '../shared/labels.js';
 import { accountStatus, signIn, signOut } from './auth.js';
 import { BrowserPool, configureSiteSessions, siteSessionsPersist } from './browser.js';
-import { detectModsDirs } from './modsdir.js';
+import { describeModsDirs, detectModsDirs } from './modsdir.js';
 import { installedBrowsers, openPrivate } from './browsers.js';
-import { recentLogLines, redact } from './log.js';
+import { recentLogLines } from './log.js';
 import { openFolder, openUrl, revealFile } from './open.js';
 import { removeAfterExit } from './privacy.js';
 
@@ -458,7 +459,7 @@ export class AppController {
     const lines = [
       `WhimWatch ${app.getVersion()} · Electron ${process.versions.electron} · Chrome ${process.versions.chrome} · Node ${process.versions.node}`,
       `OS: ${process.platform} ${process.getSystemVersion()} (${process.arch})`,
-      `Mods folders: ${s.dirs.map(redact).join(', ') || 'none'}`,
+      `Mods folders: ${describeModsDirs(s.dirs, { home: homedir(), documents: app.getPath('documents'), platform: process.platform })}`,
       `Settings: ${JSON.stringify(s.settings)}`,
       `Signed in: ${this.accounts.map((a) => `${a.label} ${a.signedIn ? 'yes' : 'no'}`).join(', ')} · site sessions ${siteSessionsPersist() ? 'on disk' : 'in memory'}${this.weakCookieStorage ? ' · no keyring' : ''}`,
       result
