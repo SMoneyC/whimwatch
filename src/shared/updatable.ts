@@ -19,9 +19,12 @@ export function isNewer(remote: number, local: number, seenAt?: number): boolean
  * page marked as seen on its own (RemoteInfo.seenAt) is hidden without hiding the creator's others.
  */
 export function outdatedRemotes(remotes: RemoteInfo[], localUpdatedAt: number, dismissedAt?: number): RemoteInfo[] {
-  return ownedRemotes(remotes).filter(
-    (r) => r.status === 'ok' && r.updatedAt !== undefined && isNewer(r.updatedAt, r.yoursAt ?? localUpdatedAt, r.seenAt ?? dismissedAt),
-  );
+  return ownedRemotes(remotes).filter((r) => {
+    // Either mark hides the page, so a later "Mark all as seen" still clears one that carries an
+    // older mark of its own. Taking the page's own date alone let a stale per-page mark shadow it.
+    const seen = Math.max(r.seenAt ?? 0, dismissedAt ?? 0) || undefined;
+    return r.status === 'ok' && r.updatedAt !== undefined && isNewer(r.updatedAt, r.yoursAt ?? localUpdatedAt, seen);
+  });
 }
 
 /**

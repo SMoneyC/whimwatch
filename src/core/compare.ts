@@ -37,6 +37,28 @@ export function creatorStatus(
 }
 
 /**
+ * Which mark a "Mark as seen" click should write: the one page the user pointed at, or one date
+ * across the whole creator.
+ *
+ * Ownership deliberately isn't required for the per-page mark. Only packs carrying WickedWhims
+ * tuning have an author in the file; a plain CAS pack has none and reaches its creator by filename
+ * instead, so it never gets a yoursAt of its own. On real data that was 4 pages of 18, so requiring
+ * yoursAt sent most marks to the creator-wide branch, leaving a single date that the creator's next
+ * post immediately outruns — the "I mark it as seen and it keeps coming back" report.
+ */
+export function seenMark(
+  creator: { remotes: RemoteInfo[]; remoteUpdatedAt?: number } | undefined,
+  listingUrl?: string,
+): { page?: string; at: number } | undefined {
+  const page = listingUrl ? creator?.remotes.find((r) => r.listing.url === listingUrl) : undefined;
+  if (page?.updatedAt !== undefined) return { page: page.listing.url, at: page.updatedAt };
+  // A page carrying no date of its own (a Patreon creator page, say) can't be marked on its own.
+  // Fall back to the creator rather than returning nothing, or the button does nothing at all.
+  const checked = creator?.remoteUpdatedAt;
+  return checked === undefined ? undefined : { at: seenUpTo(creator?.remotes ?? [], checked) };
+}
+
+/**
  * The date to mark as seen after checking one source dated `checked`: that
  * date, or a later one from a source posted within the same day (the same
  * release). Sources dated later than that stay visible as updates.

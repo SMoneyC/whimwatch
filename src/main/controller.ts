@@ -19,7 +19,7 @@ import {
 import { isNewerRelease, latestRelease } from '../core/app-update.js';
 import { dirSize, expiredBackups, hasLiveBackup, listDirNames, orphanBackupDirs, removeDir } from '../core/backups.js';
 import { CORE_KEY, coreResult, markSeenPages, runCheck, unrecognizedFiles } from '../core/check.js';
-import { creatorStatus, isNewer, outdatedRemotes, seenUpTo } from '../core/compare.js';
+import { creatorStatus, isNewer, outdatedRemotes, seenMark } from '../core/compare.js';
 import { groupByCreator } from '../core/creators.js';
 import { datePacks } from '../core/ownership.js';
 import { BUNDLED_OVERRIDES, loadOverrides, type Overrides } from '../core/overrides.js';
@@ -283,8 +283,10 @@ export class AppController {
    * automatic check stays off when the setting is off.
    */
   async checkAppUpdate(force = false): Promise<AppSnapshot> {
-    const last = this.state.appRelease?.checkedAt ?? 0;
-    if (!force && (!this.state.settings.checkAppUpdates || Date.now() - last < 24 * 60 * 60 * 1000)) return this.snapshot();
+    // Once per launch, not once a day: index.ts asks only on did-finish-load, so this is already
+    // one request per start. A day-old answer meant someone who had just been told to update, and
+    // restarted to get it, was told again by the stale cache.
+    if (!force && !this.state.settings.checkAppUpdates) return this.snapshot();
     try {
       const release = await latestRelease(REPO_SLUG);
       this.state.appRelease = release ? { ...release, checkedAt: Date.now() } : { version: '0', url: '', checkedAt: Date.now() };
@@ -640,10 +642,14 @@ export class AppController {
   async dismiss(key: unknown, remoteUpdatedAt: unknown): Promise<AppSnapshot> {
     const creatorKey = str(key);
     const creator = this.state.lastResult?.creators.find((c) => c.key === creatorKey);
-    // Each pack that's behind is marked on its own, so one of them can't bury the others; pages
-    // that name no pack of theirs are covered creator-wide, as before.
+    // Each pack that's behind is marked on its own, so one of them can't bury the others; a page
+    // with no date at all is covered by the creator-wide mark appended below.
+    //
+    // Ownership isn't required, for the same reason it isn't in seenMark: only packs carrying
+    // WickedWhims tuning have an author in the file, so a plain CAS pack never gets a yoursAt and
+    // would fall back to the creator-wide date alone — which the creator's next post outruns.
     const marks: SeenMark[] = outdatedRemotes(creator?.remotes ?? [], creator?.localUpdatedAt ?? 0, creator?.dismissedAt).flatMap((r) =>
-      r.yoursAt !== undefined && r.updatedAt !== undefined ? [{ key: creatorKey, page: r.listing.url, at: r.updatedAt }] : [],
+      r.updatedAt !== undefined ? [{ key: creatorKey, page: r.listing.url, at: r.updatedAt }] : [],
     );
     return this.applySeen('one', [...marks, { key: creatorKey, at: Number(remoteUpdatedAt) }]);
   }
@@ -726,14 +732,9 @@ export class AppController {
       at = result?.core.releasedAt;
     } else {
       const creator = result?.creators.find((c) => c.key === key);
-      const page = listingUrl ? creator?.remotes.find((r) => r.listing.url === listingUrl) : undefined;
-      // A page that names one pack is marked on its own. Marking it creator-wide would bury every
-      // older pack of theirs that is genuinely behind — which is exactly what per-pack dating fixed.
-      if (page?.yoursAt !== undefined && page.updatedAt !== undefined) {
-        return this.applySeen('one', [{ key, page: page.listing.url, at: page.updatedAt }], opts.automatic);
-      }
-      const checked = page ? page.updatedAt : creator?.remoteUpdatedAt;
-      if (checked !== undefined) at = seenUpTo(creator?.remotes ?? [], checked);
+      const mark = seenMark(creator, listingUrl);
+      if (mark?.page !== undefined) return this.applySeen('one', [{ key, page: mark.page, at: mark.at }], opts.automatic);
+      at = mark?.at;
     }
     if (at === undefined) return this.snapshot();
     // Never un-hide something the user already dismissed at a later date.
