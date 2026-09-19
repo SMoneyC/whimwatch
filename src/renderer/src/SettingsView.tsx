@@ -200,7 +200,7 @@ function General({ snapshot, app, set }: { snapshot: AppSnapshot; app: AppModel;
         </SettingRow>
         <ToggleRow
           title="Tell me when a new WhimWatch version is out"
-          hint="Asks GitHub for the latest release at most once a day."
+          hint="Asks GitHub for the latest release each time WhimWatch starts."
           checked={settings.checkAppUpdates}
           onChange={(v) => set({ checkAppUpdates: v })}
         />
