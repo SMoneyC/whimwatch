@@ -23,7 +23,7 @@ import { groupByCreator } from '../core/creators.js';
 import { datePacks } from '../core/ownership.js';
 import { BUNDLED_OVERRIDES, loadOverrides, type Overrides } from '../core/overrides.js';
 import { filesFromCache, rescanPaths, type ScanCache, scanDirs } from '../core/scanner.js';
-import { classifyUrl, linkKey } from '../core/sources/urls.js';
+import { classifyUrl, linkKey, linkProblem, normalizeUserUrl } from '../core/sources/urls.js';
 import { APP_ID, REPO_SLUG } from '../shared/config.js';
 import { type AppState, loadScanCache, loadState, SaveQueue, saveState, writeJsonAtomic } from '../core/store.js';
 import {
@@ -772,10 +772,9 @@ export class AppController {
   }
 
   async addLink(key: unknown, url: unknown): Promise<AppSnapshot> {
-    const link = str(url).trim();
-    if (!classifyUrl(link) || classifyUrl(link) === 'wwmod') {
-      throw new Error('Only wicked.cc pages, LoversLab file pages and Patreon creator pages are supported.');
-    }
+    const link = normalizeUserUrl(str(url));
+    const problem = linkProblem(link);
+    if (problem) throw new Error(problem);
     const site = classifyUrl(link) as UpdateSite;
     if (this.state.settings.mutedSources.includes(site)) {
       throw new Error(`${SOURCE_LABEL[site]} is turned off in Settings → General. Turn it on there to add this page.`);
