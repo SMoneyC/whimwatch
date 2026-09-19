@@ -3,6 +3,29 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-09-19
+
+### Changed
+
+- Privacy fix: Diagnostics no longer include your Mods folder paths, only their shape — "the default
+  Documents location, another drive or folder". Hiding your home folder wasn't enough on its own: a
+  folder on another drive, a network share, a mounted Windows drive, or a work OneDrive could potentially have a name
+  in it. Bug reports still say the part that helps with diagnosis.
+
+### Fixed
+
+- **Add a download page** now takes an address pasted straight from your browser. Browsers hide the
+  `https://`, so what you copy often arrives without it — and WhimWatch used to turn those away as
+  unsupported. It also now says what's wrong with the link you gave ("that's a LoversLab page, but
+  not a file page") instead of only listing what it accepts.
+- Adding a download page now refuses an address that only looks like a supported site. A link such
+  as `javascript://wicked.cc/…` parsed as a wicked.cc page and was accepted, because only the host
+  was ever checked. Present since 0.1.0; nothing is known to have used it.
+- WhimWatch now closes gracefully on quit. After a check had run, closing the window could leave it running with
+  nothing on screen — and because it still held the single-instance lock, opening WhimWatch again
+  did nothing until the old one was ended in Task Manager. The hidden windows it uses to read sites
+  were keeping it alive.
+
 ## [0.2.0] - 2026-09-18
 
 ### Added
