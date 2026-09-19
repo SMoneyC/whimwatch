@@ -3,6 +3,21 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.2] - 2026-09-19
+
+### Changed
+
+- WhimWatch now asks GitHub for the latest version every time it starts, rather than once a day. If
+  you restart after seeing that an update is out, you no longer get the same notice from a day-old
+  answer.
+
+### Fixed
+
+- **Mark as seen** now sticks to the pack you marked. Clothing and body packs often carry no creator
+  details inside the file, so WhimWatch couldn't date them individually — and marking one of them
+  quietly marked the whole creator instead. One date covered every pack of theirs, and their next
+  post outran it, so the same prompt kept coming back. Each pack is now marked on its own.
+
 ## [0.2.1] - 2026-09-19
 
 ### Changed

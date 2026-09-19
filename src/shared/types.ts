@@ -198,6 +198,12 @@ export interface InstallRecord {
    * out later from the operations: an ordinary update that only adds files looks identical.
    */
   newPack?: boolean;
+  /**
+   * The page this pack came from. A plain CAS pack carries no WickedWhims tuning and so no author,
+   * and is tied to its creator by filename alone; recording the page it was installed from is the
+   * only thing that links such a file to a specific pack rather than just to a creator.
+   */
+  listingUrl?: string;
   undoneAt?: number;
   /** The backup was deleted (expired or cleared), so the update can't be undone. */
   backupDeletedAt?: number;

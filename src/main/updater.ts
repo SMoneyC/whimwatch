@@ -323,6 +323,7 @@ export class Updater {
       return await this.controller.recordInstall({
         ...record,
         source: plan.source,
+        listingUrl: plan.downloadUrl,
         batchId: meta.batchId,
         automatic: meta.automatic || undefined,
         newPack: newPack || undefined,
