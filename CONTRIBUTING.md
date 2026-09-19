@@ -119,4 +119,10 @@ Downloads are separate. Public downloads go in `src/core/downloads.ts` and must 
   in memory (`test/helpers/dbpf-builder.ts`).
 - Be gentle with the sites: keep the per-host pacing in `HostQueue`, and don't add background polling.
 - Never touch a user's real Mods folder in tests or scripts. Work on temporary copies.
+- Keep real creator names out of the repository. Code, tests, fixtures, comments, changelog notes
+  and commit messages use the neutral cast — Moonberry, Amberlily, EchoSims, and pack names like Juniper Petal. Two
+  files are exempt because the real name *is* the data: [`catalog/overrides.json`](catalog/overrides.json)
+  and [`src/main/smoke.ts`](src/main/smoke.ts), which checks live pages.
+- Diagnostics and anything else built for a bug report carry no creator names, page addresses or
+  folder paths — only the shape of things. `test/report-hygiene.test.ts` enforces this.
 - Before opening a pull request, run `npm run lint`, `npm run typecheck` and `npm test`.

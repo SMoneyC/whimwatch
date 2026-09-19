@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { toCreatorResult } from '../src/core/check.js';
+import { markSeenPages, toCreatorResult } from '../src/core/check.js';
 import { linkKey } from '../src/core/sources/urls.js';
-import { creatorStatus, outdatedRemotes, seenUpTo, TOLERANCE_MS } from '../src/core/compare.js';
+import { creatorStatus, outdatedRemotes, seenMark, seenUpTo, TOLERANCE_MS } from '../src/core/compare.js';
 import { type CreatorGroup, fileNameKey, groupByCreator } from '../src/core/creators.js';
 import { classifyRemotes, datePacks, packFiles, packOwnership, packWords } from '../src/core/ownership.js';
 import { chooseRemote } from '../src/core/source-choice.js';
@@ -21,7 +21,7 @@ const file = (relPath: string, opts: { author?: string; kind?: PackageKind; at?:
 });
 
 const page = (title: string, url = title.toLowerCase().replace(/\W+/g, '-')): RemoteInfo => ({
-  listing: { source: 'wickedcc', url: `https://wicked.cc/clothing/sm-sims/${url}`, origin: 'directory' },
+  listing: { source: 'wickedcc', url: `https://wicked.cc/clothing/moonberry/${url}`, origin: 'directory' },
   checkedAt: 0,
   status: 'ok',
   updatedAt: Date.parse('2026-06-01'),
@@ -323,5 +323,57 @@ describe('what a new pack does to a creator', () => {
     const pack: RemoteInfo = { ...page('Cinder Shorts'), updatedAt: checked + TOLERANCE_MS / 2, owned: 'no' };
     expect(seenUpTo([pack], checked)).toBe(checked);
     expect(seenUpTo([{ ...pack, owned: 'yes' }], checked)).toBe(checked + TOLERANCE_MS / 2);
+  });
+});
+
+describe('marking one pack as seen when the creator has no author metadata', () => {
+  // Plain CAS packs: no WickedWhims tuning, so they reach the creator by filename and no remote
+  // here gets a yoursAt of its own.
+  const dated = (title: string, at: string): RemoteInfo => ({ ...page(title), updatedAt: Date.parse(at) });
+  const creator = {
+    remotes: [dated('Lace Slip', '2026-09-16T22:38:44Z'), dated('Velvet Dress', '2026-09-11T06:04:17Z'), dated('Sorbet Set', '2026-09-04T05:32:31Z')],
+    remoteUpdatedAt: Date.parse('2026-09-16T22:38:44Z'),
+  };
+  const velvet = creator.remotes[1]!.listing.url;
+
+  it('marks the page the user pointed at, not the whole creator', () => {
+    const mark = seenMark(creator, velvet);
+    expect(mark?.page).toBe(velvet);
+    expect(mark?.at).toBe(Date.parse('2026-09-11T06:04:17Z'));
+  });
+
+  it('does not need yoursAt to do it', () => {
+    // Requiring ownership here is what sent every one of this creator's marks creator-wide.
+    expect(creator.remotes.every((r) => r.yoursAt === undefined)).toBe(true);
+    expect(seenMark(creator, velvet)?.page).toBeDefined();
+  });
+
+  it('still marks creator-wide when no page was named', () => {
+    const mark = seenMark(creator);
+    expect(mark?.page).toBeUndefined();
+    expect(mark?.at).toBe(Date.parse('2026-09-16T22:38:44Z'));
+  });
+
+  it('falls back to the creator when the page carries no date of its own', () => {
+    // A Patreon creator page has no release date; returning nothing made the button do nothing.
+    const noDate = { ...page('Creator page'), updatedAt: undefined } as RemoteInfo;
+    const c = { remotes: [...creator.remotes, noDate], remoteUpdatedAt: creator.remoteUpdatedAt };
+    const mark = seenMark(c, noDate.listing.url);
+    expect(mark?.page).toBeUndefined();
+    expect(mark?.at).toBe(Date.parse('2026-09-16T22:38:44Z'));
+  });
+
+  it('lets a later mark-all clear a page carrying an older mark of its own', () => {
+    // The page moved on after it was marked, then everything was marked seen at a later date.
+    const moved = { ...creator.remotes[1]!, updatedAt: Date.parse('2026-09-20T00:00:00Z'), seenAt: Date.parse('2026-09-11T06:04:17Z') };
+    const markAll = Date.parse('2026-09-25T00:00:00Z');
+    expect(outdatedRemotes([moved], 0, markAll)).toEqual([]);
+    // Without the later creator-wide mark it is still genuinely behind.
+    expect(outdatedRemotes([moved], 0).map((r) => r.title)).toEqual(['Velvet Dress']);
+  });
+
+  it('leaves the creator\u2019s other packs alone', () => {
+    const marked = markSeenPages(creator.remotes, { [linkKey(velvet)]: Date.parse('2026-09-11T06:04:17Z') });
+    expect(outdatedRemotes(marked, 0).map((r) => r.title)).toEqual(['Lace Slip', 'Sorbet Set']);
   });
 });
