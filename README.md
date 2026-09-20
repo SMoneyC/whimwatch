@@ -27,7 +27,7 @@ Worth noting, if you are new here:
 * WhimWatch is NOT and does NOT condone pirating; In fact, I hope this project removes friction so you can more easily support the rich community of artists and creators who contribute to WickedWhims.
 
 I want to also make this clear - While WhimWatch is maintained with LLM-assistance, I am a software engineer by trade who has worked in this industry for over a decade. 
-I write some WhimWatch code by hand, some with LLM-assitance, but I review and understand every line regardless. 
+I write some WhimWatch code by hand, some with LLM-assistance, but I review and understand every line regardless. 
 I take the nuanced stance that using an LLM as one of many tools in the process does not make my software less genuinely mine when I am reviewing every line, making edits, and making the architectural and engineering decisions for the project, and I own the responsibility of all those pieces.
 I really, really care about the quality of what I put out and have the experience and desire to maintain a good product, and I am not a vibe-coder just slopping it up. 
 I do understand AI/LLMs are very divisive, so I wanted to be as transparent as possible about this while also being adamant that I am not a slop-shoveler, and I am putting a lot of effort and passion into building and maintaining this project, and I hope you see that come through in my code and the experience of the app.
