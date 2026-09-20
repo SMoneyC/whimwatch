@@ -26,7 +26,7 @@ Worth noting, if you are new here:
 * WhimWatch is an independent project and is not affiliated with TURBODRIVER, Electronic Arts, wicked.cc, LoversLab or Patreon.
 * WhimWatch is NOT and does NOT condone pirating; In fact, I hope this project removes friction so you can more easily support the rich community of artists and creators who contribute to WickedWhims.
 
-I want to also make this clear - While WhimWatch was built with LLM-assistance, I am a software dev who cares about the quality of what I put out and has the experience and desire to maintain a good product:
+I want to also make this clear - While WhimWatch is maintained with LLM-assistance, I am a software engineer by trade who has worked in this industry for over a decade. I write some WhimWatch code by hand, some with LLMs, but I review and understand every line regardless. I really, really care about the quality of what I put out and have the experience and desire to maintain a good product, and I am not a vibe-coder just slopping it up. I understand AI/LLMs are very divisive, so I wanted to be as transparent as possible about this while also being adamant that I am not a slop-shoveler, and I am putting a lot of effort and passion into building and maintaining this project, and I hope you see that come through in my code and the experience of the app.
 
 I designed WhimWatch to be respectful of privacy, secure, easy-to-use, customizable, and simple to submit improvements and bug reports to.
 
