@@ -118,7 +118,7 @@ export function Home({
   };
 
   const checkedText = running
-    ? 'Checking now · thanks for waiting!'
+    ? 'Checking now · Thanks for waiting!'
     : result
       ? `${snapshot.firstCheckNotice ? 'First check' : 'Checked'} ${timeAgo(result.finishedAt)}`
       : '';
