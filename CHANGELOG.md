@@ -3,6 +3,15 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.3] - 2026-09-23
+
+### Fixed
+
+- Mark as seen, turning a site off for a creator, and removing a page now show immediately while a check is running (before, the row stayed as it was until the check finished)
+- Changes made while a check is running now persist for creators the check hasn't reached yet. A removed page no longer comes back when the check ends, its Undo works even once the check has moved past that creator, and a page marked as seen stays hidden.
+- A site turned off while a check is running is no longer contacted for the rest of that check.
+- Undoing "Mark as seen" for one page, from History or with "Undo mark as seen", shows that update again straight away (before, it would stay hidden until the next check)
+
 ## [0.2.2] - 2026-09-19
 
 ### Changed
