@@ -29,7 +29,7 @@ const LIST_TITLE: Record<Filter, (n: number) => string> = {
 };
 
 const EMPTY: Record<Filter, string> = {
-  updates: "You're all caught up. Nothing to update.",
+  updates: "You're all caught up! Nothing to update.",
   attention: 'Every creator has a working download page.',
   current: 'Nothing is up to date yet.',
   all: 'No WickedWhims animation packs found in your Mods folders.',
@@ -118,7 +118,7 @@ export function Home({
   };
 
   const checkedText = running
-    ? 'Checking now · results fill in as they arrive'
+    ? 'Checking now · thanks for waiting!'
     : result
       ? `${snapshot.firstCheckNotice ? 'First check' : 'Checked'} ${timeAgo(result.finishedAt)}`
       : '';
@@ -184,7 +184,7 @@ export function Home({
               <Info size={20} aria-hidden="true" />
             </span>
             <div className="first-check-copy">
-              <h2 id="first-check-title">First check done. What's left below may not be real updates.</h2>
+              <h2 id="first-check-title">Check complete; What's left below may be false positive updates.</h2>
               <p className="muted">
                 WhimWatch compares each download page's date with your file dates, so packs you installed yourself might look older than they actually are. If you're fairly sure you're current, mark them all as seen. Anything released after today will still surface as an update.
               </p>
@@ -278,7 +278,7 @@ export function Home({
             ) : running ? (
               <div className="empty card">
                 <Spinner size={22} />
-                <p>Creators appear here as the check reaches them.</p>
+                <p>Updates will appear here as checks complete.</p>
               </div>
             ) : (
               <div className="empty card">
@@ -302,8 +302,8 @@ export function Home({
         {result && result.unrecognizedCount > 0 && (
           <footer className="other-line faint small">
             {result.unrecognizedCount === 1
-              ? "1 other mod or CC file in your folders isn't a WickedWhims animation pack, so WhimWatch leaves it alone."
-              : `${formatCount(result.unrecognizedCount)} other mods and CC files in your folders aren't WickedWhims animation packs, so WhimWatch leaves them alone.`}{' '}
+              ? "1 other mod or CC file in your folders isn't a WickedWhims animation pack, so WhimWatch will leave it alone."
+              : `${formatCount(result.unrecognizedCount)} other mods and CC files in your folders aren't WickedWhims animation packs, so WhimWatch will leave them alone.`}{' '}
             <button type="button" className="link-btn" onClick={() => setShowOther(true)}>
               Show them
             </button>

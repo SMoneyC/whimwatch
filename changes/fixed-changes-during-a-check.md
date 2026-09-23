@@ -1,0 +1,1 @@
+- Mark as seen, turning a site off for a creator, and removing a page now show at once while a check is running. Before, the row stayed as it was until the check finished, and a page removed during a check came back when it ended.

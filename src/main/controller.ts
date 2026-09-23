@@ -42,6 +42,7 @@ import {
   type AppSettings,
   type CheckProgress,
   type CheckResult,
+  type CreatorResult,
   type CreatorStatus,
   type InstallRecord,
   type LocalFile,
@@ -93,7 +94,13 @@ export class AppController {
   /** Set once the user confirmed "Remove all data": nothing else should run on the way out. */
   removingData = false;
   /** The link removed last, so its toast can put it back. */
-  private lastRejected?: { key: string; url: string; wasManual: boolean; remotes: RemoteInfo[] };
+  private lastRejected?: { key: string; url: string; wasManual: boolean; removed: [CreatorResult, RemoteInfo[]][] };
+  /**
+   * Creators the running check has finished, which the list shows in place of the saved ones until
+   * it ends. They become the check's result, so changes made meanwhile (mark as seen, a site turned
+   * off, a page removed) go to both — changing only the saved copy left the row as it was.
+   */
+  private live = new Map<string, CreatorResult>();
   private registeredShortcut?: string;
 
   private constructor(
@@ -265,6 +272,7 @@ export class AppController {
     if (!this.removingData) await this.saves.run(() => saveState(this.statePath, this.state));
     const snapshot = await this.snapshot();
     this.emit({ type: 'snapshot', snapshot });
+    for (const creator of this.live.values()) this.emit({ type: 'creator', creator });
     return snapshot;
   }
 
@@ -318,6 +326,7 @@ export class AppController {
     this.progress = { phase: 'scan', done: 0, total: 0, message: 'Starting' };
     const abort = (this.checkAbort = new AbortController());
     this.checkMessage = undefined;
+    this.live.clear();
     // A site that wanted a human check last time is worth trying again now.
     this.pool.clearVerification();
     await this.commit();
@@ -337,7 +346,10 @@ export class AppController {
           this.progress = progress;
           this.emit({ type: 'progress', progress });
         },
-        onCreator: (creator) => this.emit({ type: 'creator', creator }),
+        onCreator: (creator) => {
+          this.live.set(creator.key, creator);
+          this.emit({ type: 'creator', creator });
+        },
         signal: abort.signal,
       });
       const first = !this.state.lastResult;
@@ -363,6 +375,7 @@ export class AppController {
       this.running = false;
       this.checkAbort = undefined;
       this.progress = undefined;
+      this.live.clear();
       await this.commit();
     }
     const result = this.state.lastResult;
@@ -634,14 +647,30 @@ export class AppController {
 
   /** Shown right away; a site turned back on is only checked again by the next check. */
   private applyMuted(): void {
-    if (!this.state.lastResult) return;
-    applyMutedSources(this.state.lastResult, this.state.settings.mutedSources, this.creatorMutedSources());
+    const creators = this.allCreators();
+    if (!creators.length) return;
+    applyMutedSources({ creators }, this.state.settings.mutedSources, this.creatorMutedSources());
     this.refreshStatuses();
+  }
+
+  /** The creator as the list shows it: this check's copy while it runs, otherwise the saved one. */
+  private shownCreator(key: string): CreatorResult | undefined {
+    return this.live.get(key) ?? this.state.lastResult?.creators.find((c) => c.key === key);
+  }
+
+  /** Every copy of a creator a change must reach: the saved one and, during a check, the live one. */
+  private copiesOf(key: string): CreatorResult[] {
+    return this.allCreators().filter((c) => c.key === key);
+  }
+
+  private allCreators(): CreatorResult[] {
+    const saved = this.state.lastResult?.creators ?? [];
+    return [...saved, ...[...this.live.values()].filter((c) => !saved.includes(c))];
   }
 
   async dismiss(key: unknown, remoteUpdatedAt: unknown): Promise<AppSnapshot> {
     const creatorKey = str(key);
-    const creator = this.state.lastResult?.creators.find((c) => c.key === creatorKey);
+    const creator = this.shownCreator(creatorKey);
     // Each pack that's behind is marked on its own, so one of them can't bury the others; a page
     // with no date at all is covered by the creator-wide mark appended below.
     //
@@ -703,7 +732,7 @@ export class AppController {
   }
 
   private nameOf(key: string): string {
-    return key === CORE_KEY ? 'WickedWhims' : (this.state.lastResult?.creators.find((c) => c.key === key)?.name ?? key);
+    return key === CORE_KEY ? 'WickedWhims' : (this.shownCreator(key)?.name ?? key);
   }
 
   /** What setup found in the folders; the scan is cached, so the first check doesn't read the files again. */
@@ -731,8 +760,7 @@ export class AppController {
     if (key === CORE_KEY) {
       at = result?.core.releasedAt;
     } else {
-      const creator = result?.creators.find((c) => c.key === key);
-      const mark = seenMark(creator, listingUrl);
+      const mark = seenMark(this.shownCreator(key), listingUrl);
       if (mark?.page !== undefined) return this.applySeen('one', [{ key, page: mark.page, at: mark.at }], opts.automatic);
       at = mark?.at;
     }
@@ -799,10 +827,12 @@ export class AppController {
     const wasManual = prefs.manual.some(same);
     prefs.manual = prefs.manual.filter((u) => !same(u));
     if (!prefs.rejected.some(same)) prefs.rejected.push(link);
-    const creator = this.state.lastResult?.creators.find((c) => c.key === k);
-    const removed = creator?.remotes.filter((r) => same(r.listing.url)) ?? [];
-    if (creator) creator.remotes = creator.remotes.filter((r) => !same(r.listing.url));
-    this.lastRejected = { key: k, url: link, wasManual, remotes: removed };
+    const removed = this.copiesOf(k).map((creator): [CreatorResult, RemoteInfo[]] => {
+      const gone = creator.remotes.filter((r) => same(r.listing.url));
+      creator.remotes = creator.remotes.filter((r) => !same(r.listing.url));
+      return [creator, gone];
+    });
+    this.lastRejected = { key: k, url: link, wasManual, removed };
     this.refreshStatuses();
     return this.commit();
   }
@@ -815,7 +845,7 @@ export class AppController {
     const prefs = this.prefs(k);
     prefs.rejected = prefs.rejected.filter((u) => linkKey(u) !== linkKey(link));
     if (stash.wasManual) prefs.manual.push(stash.url);
-    this.state.lastResult?.creators.find((c) => c.key === k)?.remotes.push(...stash.remotes);
+    for (const [creator, remotes] of stash.removed) creator.remotes.push(...remotes);
     this.lastRejected = undefined;
     this.refreshStatuses();
     return this.commit();
@@ -906,17 +936,15 @@ export class AppController {
 
   /** Re-derives statuses after dismissals or link removals without a new check. */
   private refreshStatuses(): void {
-    const result = this.state.lastResult;
-    if (!result) return;
-    for (const creator of result.creators) {
+    for (const creator of this.allCreators()) {
       const dismissedAt = this.state.dismissed[creator.key];
       // Marking one page as seen changes only that page, so re-apply them before comparing.
       creator.remotes = markSeenPages(creator.remotes, this.state.linkPrefs[creator.key]?.seen);
       const { status, remoteUpdatedAt, behindBy } = creatorStatus(creator.localUpdatedAt, creator.remotes, dismissedAt);
       Object.assign(creator, { status, remoteUpdatedAt, behindBy, dismissedAt });
     }
-    const core = result.core;
-    if (core.installed && core.releasedAt !== undefined) {
+    const core = this.state.lastResult?.core;
+    if (core?.installed && core.releasedAt !== undefined) {
       core.status = isNewer(core.releasedAt, core.installed.mtimeMs, this.state.dismissed[CORE_KEY]) ? 'update-available' : 'up-to-date';
     }
   }

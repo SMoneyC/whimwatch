@@ -7,7 +7,7 @@ import { type CheckResult, type CreatorResult, type RemoteInfo, UPDATE_SITES, ty
  * until the next check. Statuses aren't recomputed here.
  */
 export function applyMutedSources(
-  result: CheckResult,
+  result: Pick<CheckResult, 'creators'>,
   mutedSources: readonly UpdateSite[],
   creatorMuted: Record<string, readonly UpdateSite[] | undefined> = {},
 ): void {
