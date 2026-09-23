@@ -132,6 +132,12 @@ export interface CreatorResult {
   dismissedAt?: number;
   /** Turned-off sites that have a page for this creator. None of them count towards the status. */
   mutedSources?: UpdateSite[];
+  /**
+   * Every site is turned off for this creator (for them or for everyone). Set even when none of them
+   * had a page: mutedSources lists only sites that did, and a creator with no pages would otherwise
+   * stay "No page found" after the user asked for nothing to be checked.
+   */
+  allSitesOff?: true;
   /** Results from sites turned off after this check, put back if the site is turned on again. */
   mutedRemotes?: RemoteInfo[];
 }

@@ -5,6 +5,12 @@ import { SOURCE_LABEL } from './format';
 
 export const CORE_KEY = '__wickedwhims__';
 
+/**
+ * Why installing is off while a check runs: an install then would be undone by the check's result,
+ * built from the files as they were before it. A greyed-out button with no reason reads as broken.
+ */
+export const AFTER_CHECK = 'Available when the check finishes';
+
 export interface Candidate {
   key: string;
   name: string;
@@ -142,8 +148,8 @@ export function rowStatus(c: CreatorResult): RowStatus {
       return 'verify';
     default:
       if (c.remotes.some((r) => r.status === 'error')) return 'failed';
-      // Every page it has is on a site the user turned off: nothing to fix.
-      return c.mutedSources?.length && !c.remotes.length ? 'off' : 'missing';
+      // Every page it has is on a site the user turned off, or every site is: nothing to fix.
+      return c.allSitesOff || (c.mutedSources?.length && !c.remotes.length) ? 'off' : 'missing';
   }
 }
 
@@ -199,6 +205,7 @@ export function rowSummary(c: CreatorResult, timeAgo: (t: number) => string): st
       return `Couldn't reach ${site ? SOURCE_LABEL[site] : 'the site'}`;
     }
     case 'off': {
+      if (c.allSitesOff) return 'Every site is turned off';
       const sites = c.mutedSources ?? [];
       return `${siteList(sites)} ${sites.length === 1 ? 'is' : 'are'} turned off`;
     }

@@ -1,0 +1,1 @@
+- A creator with no download pages no longer shows under "Need a look" once every site is turned off for them.

@@ -26,6 +26,8 @@ export function applyMutedSources(
     else delete creator.mutedRemotes;
     if (mutedSites.length) creator.mutedSources = mutedSites;
     else delete creator.mutedSources;
+    if (UPDATE_SITES.every((site) => muted.has(site))) creator.allSitesOff = true;
+    else delete creator.allSitesOff;
   }
 }
 

@@ -8,7 +8,7 @@ import type { Fetcher, HttpResponse } from '../src/core/fetcher.js';
 import { SNIPPET_TUNING_TYPE } from '../src/core/scanner.js';
 import { linkKey } from '../src/core/sources/urls.js';
 import { applyMutedSources, needsCheckAfterUnmute } from '../src/shared/muted.js';
-import type { CheckResult, CreatorResult, RemoteInfo, UpdateSite } from '../src/shared/types.js';
+import { type CheckResult, type CreatorResult, type RemoteInfo, UPDATE_SITES, type UpdateSite } from '../src/shared/types.js';
 import { buildDbpf, wwTuningXml } from './helpers/dbpf-builder.js';
 import * as pages from './fixtures/pages.js';
 
@@ -328,6 +328,21 @@ describe('turning sites off and on between checks', () => {
     expect(r.creators[0]!.remotes.map((x) => x.listing.source)).toEqual(['wickedcc', 'loverslab', 'patreon']);
     expect(r.creators[0]!.mutedSources).toBeUndefined();
     expect(r.creators[0]!.mutedRemotes).toBeUndefined();
+  });
+
+  it('notes every site turned off, even for a creator with no pages anywhere', () => {
+    const r = result([{ remotes: [] }, { remotes: [remote('wickedcc')] }]);
+    applyMutedSources(r, [], { c0: [...UPDATE_SITES] });
+    expect(r.creators[0]).toMatchObject({ allSitesOff: true, remotes: [] });
+    // Nothing had a page, so nothing is listed as set aside.
+    expect(r.creators[0]!.mutedSources).toBeUndefined();
+    expect(r.creators[1]!.allSitesOff).toBeUndefined();
+
+    applyMutedSources(r, ['wickedcc', 'loverslab', 'patreon']);
+    expect(r.creators.every((c) => c.allSitesOff)).toBe(true);
+    // Turning one back on for everyone clears it where that site isn't also off just for them.
+    applyMutedSources(r, ['loverslab', 'patreon'], { c0: [...UPDATE_SITES] });
+    expect(r.creators.map((c) => c.allSitesOff)).toEqual([true, undefined]);
   });
 
   it('knows when a site was already off during the check, so turning it on needs a new one', () => {

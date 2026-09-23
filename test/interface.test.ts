@@ -55,6 +55,13 @@ describe('creator rows', () => {
     expect(rowStatus(creator('F', 'up-to-date', [remote('wickedcc')], { mutedSources: ['patreon'] }))).toBe('current');
   });
 
+  it('keep a creator with no pages out of "Need a look" once every site is turned off for them', () => {
+    const none = creator('G', 'unknown', [], { allSitesOff: true });
+    expect(rowStatus(none)).toBe('off');
+    expect(rowAction(none, snapshot())).toEqual({ kind: 'none' });
+    expect(rowSummary(none, (t) => timeAgo(t, NOW))).toBe('Every site is turned off');
+  });
+
   it('offer the one button that helps', () => {
     const snap = snapshot();
     expect(rowAction(creator('A', 'update-available', [remote('wickedcc')]), snap)).toEqual({ kind: 'update' });

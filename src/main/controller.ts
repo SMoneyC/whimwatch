@@ -113,6 +113,8 @@ export class AppController {
     const controller = new AppController(statePath, backupRoot);
     controller.scanCache = await loadScanCache(controller.scanCachePath, statePath);
     controller.state = await loadState(statePath);
+    // Results saved by an older version predate allSitesOff: derive it now, not at the next check.
+    controller.applyMuted();
     controller.pool.onVerificationNeeded = (site) => controller.emit({ type: 'verification-needed', site });
     controller.pool.onVerificationPassed = (site) => controller.emit({ type: 'verification-passed', site });
     controller.weakCookieStorage = weakCookieStorage();
