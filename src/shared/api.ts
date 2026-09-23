@@ -136,6 +136,13 @@ export interface UpdatePlan {
   warnings: string[];
   /** Every downloaded mod file matches what's installed: nothing to update. */
   upToDate: boolean;
+  /**
+   * The files of yours in the download are unchanged, and all it adds is files you don't have: most
+   * likely a new pack put on the same page (a creator's Simlish edition, say), which the page's newer
+   * date made look like an update. It can also be an update that only adds a file, so it's the
+   * user's call: Update all leaves it alone and the Update window asks.
+   */
+  onlyAdds?: boolean;
 }
 
 /** What the user picked in the update preview. */

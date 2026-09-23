@@ -112,6 +112,8 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
 
   const replaceFiles = plan?.files.filter((f) => f.kind === 'replace' && !f.unchanged) ?? [];
   const addFiles = plan?.files.filter((f) => f.kind === 'add') ?? [];
+  // Your files are all unchanged and it only adds new ones: usually a new pack on the same page.
+  const onlyAdds = Boolean(plan?.onlyAdds && !newPack);
   const unchanged = plan?.files.filter((f) => f.unchanged) ?? [];
   const chosenReplace = replaceFiles.filter((f) => !skip.includes(f.target)).length;
   const chosenAdd = addFiles.filter((f) => !skip.includes(f.target)).length;
@@ -211,9 +213,22 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
               {newerElsewhere ? 'Mark all as seen' : 'Mark as seen'}
             </Button>
           ) : (
-            <Button variant="primary" icon={gameOpen ? Gamepad2 : Download} onClick={install} disabled={!plan || installing || gameOpen || nothingChosen}>
-              {installing ? 'Installing…' : gameOpen ? 'Close the game to install' : newPack ? 'Install pack' : 'Install update'}
-            </Button>
+            <>
+              {onlyAdds && (
+                <Button
+                  onClick={async () => {
+                    const seen = await app.run(() => api.markSeen(target.key, plan!.downloadUrl));
+                    if (seen) close();
+                  }}
+                  disabled={installing}
+                >
+                  Mark as seen
+                </Button>
+              )}
+              <Button variant="primary" icon={gameOpen ? Gamepad2 : Download} onClick={install} disabled={!plan || installing || gameOpen || nothingChosen}>
+                {installing ? 'Installing…' : gameOpen ? 'Close the game to install' : newPack ? 'Install pack' : onlyAdds ? 'Install new files' : 'Install update'}
+              </Button>
+            </>
           )}
         </>
       }
@@ -340,6 +355,14 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
             Turns out the creator's page date is different than yours, but the file itself is the same - Nothing to update after all! Mark this as seen and {target.name} will no longer prompt for updates until the next one is posted.
           </Banner>
         )
+      )}
+
+      {onlyAdds && (
+        <Banner tone="info" title="Nothing you have has changed">
+          Your files are the same as the ones on this {shownLabel ?? 'download'} page. All it adds is {addFiles.length === 1 ? 'a file' : `${addFiles.length} files`} you
+          don't have, which is usually a new pack rather than an update. Install {addFiles.length === 1 ? 'it' : 'them'} if you want{' '}
+          {addFiles.length === 1 ? 'it' : 'them'}, or mark this as seen.
+        </Banner>
       )}
 
       {plan && !plan.upToDate && (

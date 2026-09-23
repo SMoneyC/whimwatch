@@ -129,6 +129,13 @@ export class Updater {
                 ? `Your files match ${label}. ${laterSourcesText(later, undefined, plan.source)}, so open ${later.length === 1 ? 'it' : 'those'} to see what's new.`
                 : `Your files match ${label}, but another source looks newer. Open the creator's pages to see what's new.`;
             }
+            if (plan.onlyAdds) {
+              // Not installed on the user's behalf: it's usually a new pack, not an update to theirs.
+              await this.discardPlans(key);
+              await this.controller.markSeen(key, plan.downloadUrl, { automatic: true });
+              const added = plan.files.filter((f) => f.kind === 'add').length;
+              return `Your files match ${SOURCE_LABEL[plan.source]}. It also has ${added === 1 ? 'a file' : `${added} files`} you don't have, probably a new pack: open ${plan.name} to get ${added === 1 ? 'it' : 'them'}.`;
+            }
             if (!plan.files.length) throw new Error("The download doesn't contain any .package or .ts4script files.");
             if (opts.skipIfWarnings && plan.warnings.length) throw new Error(`Needs a look: ${plan.warnings[0]}`);
             await this.apply(plan.id, { remove: [], skip: [] }, { batchId, automatic: opts.automatic });

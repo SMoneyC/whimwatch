@@ -73,9 +73,45 @@ describe('already up to date', () => {
     await markUnchanged(plan);
     expect(plan.files.map((f) => f.unchanged)).toEqual([true, false]);
     expect(plan.upToDate).toBe(false);
+    // A file of theirs changed: a real update, not just new files.
+    expect(plan.onlyAdds).toBe(false);
     const record = await applyInstall({ plan, remove: [], backupRoot: join(tmp, 'b'), modsRoots: [mods], isGameRunning: async () => false });
     expect(record.operations.map((o) => o.target)).toEqual([join(mods, 'WW_B.package')]);
     expect(await readFile(join(mods, 'WW_B.package'), 'utf8')).toBe('new!');
+  });
+
+  it("tells a page that only added a new pack apart from an update to the user's", async () => {
+    // The page's date moved because the creator put a new pack on it; their pack is untouched.
+    const mods = join(tmp, 'Mods');
+    const x = join(tmp, 'x');
+    await mkdir(mods);
+    await mkdir(x);
+    await writeFile(join(mods, 'WW_Moonberry_Animations.package'), 'same');
+    await writeFile(join(x, 'WW_Moonberry_Animations.package'), 'same');
+    await writeFile(join(x, 'WW_Moonberry_Juniper_Petal.package'), 'new pack');
+    const plan = planInstall({
+      id: 'p',
+      creatorKey: 'moonberry',
+      name: 'Moonberry',
+      downloadUrl: '',
+      source: 'loverslab',
+      downloads: ['Moonberry.zip'],
+      extractedDir: x,
+      extractedFiles: ['WW_Moonberry_Animations.package', 'WW_Moonberry_Juniper_Petal.package'],
+      installedFiles: [local(join(mods, 'WW_Moonberry_Animations.package'), mods)],
+      modsRoots: [mods],
+    });
+    await markUnchanged(plan);
+    expect(plan.files.map((f) => [f.kind, f.unchanged ?? false])).toEqual([
+      ['replace', true],
+      ['add', false],
+    ]);
+    expect(plan).toMatchObject({ upToDate: false, onlyAdds: true });
+
+    // Nothing of theirs in the download at all: not this case, whatever it is.
+    const unrelated = planInstall({ ...plan, extractedDir: x, extractedFiles: ['WW_Moonberry_Juniper_Petal.package'], installedFiles: [local(join(mods, 'WW_Moonberry_Animations.package'), mods)], modsRoots: [mods], downloads: [], id: 'q' });
+    await markUnchanged(unrelated);
+    expect(unrelated.onlyAdds).toBe(false);
   });
 });
 

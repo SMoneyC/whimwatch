@@ -85,6 +85,7 @@ export async function markUnchanged(plan: UpdatePlan, signal?: AbortSignal): Pro
     file.unchanged = await sameContent(file.source, file.target);
   }
   plan.upToDate = plan.files.length > 0 && plan.files.every((f) => f.unchanged);
+  plan.onlyAdds = !plan.upToDate && plan.files.some((f) => f.unchanged) && plan.files.every((f) => f.unchanged || f.kind === 'add');
 }
 
 async function sameContent(a: string, b: string): Promise<boolean> {
