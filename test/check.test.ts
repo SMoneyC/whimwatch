@@ -34,6 +34,10 @@ class FakeFetcher implements Fetcher {
     const res = this.respond(api);
     return { status: res.status, body: res.body };
   };
+  browserProbe = async (_page: string, url: string) => {
+    const res = this.respond(url);
+    return { status: res.status, type: 'text/html', body: res.body };
+  };
 }
 
 const withDate = (html: string, iso: string): string => html.replaceAll('2026-08-28T12:04:47+00:00', iso);
@@ -217,6 +221,36 @@ describe('runCheck', () => {
     // The user's Cancel: the same error, with the check's own signal aborted.
     const abort = new AbortController();
     await expect(runCheck({ dirs: [mods], fetcher: cutOff(new FakeFetcher(ROUTES), () => abort.abort()), signal: abort.signal })).rejects.toBeInstanceOf(CancelledError);
+  });
+
+  it('dates a LoversLab page by its files, and keeps a new pack on it apart from theirs', async () => {
+    const lab = 'https://www.loverslab.com/files/file/3528-moonberry-animations/';
+    const chooser = `${lab}?do=download`;
+    // The entry was edited on Sep 18; their pack's own file is older than their copy (2025-01-01), and
+    // the only newer file is a pack they don't have.
+    const edited = (page: string): string => page.replace('2024-04-10T21:52:40+0000', '2026-09-18T11:16:48+0000');
+    const routes = {
+      ...ROUTES,
+      [lab]: edited(pages.LOVERSLAB_FILE_SEVERAL),
+      [chooser]: pages.LOVERSLAB_CHOOSER_DATED.replace('WW_Moonberry_Animations.package', 'WW_Moonberry.package').replace('2026-07-30T13:30:28Z', '2024-12-01T10:00:00Z'),
+    };
+    const fetcher = new FakeFetcher(routes);
+    const { result } = await runCheck({ dirs: [mods], fetcher });
+    const moonberry = result.creators.find((c) => c.key === 'moonberry')!;
+    expect(moonberry.status).toBe('up-to-date');
+    expect(moonberry.remotes.find((r) => r.listing.url === lab)).toMatchObject({
+      updatedAt: Date.parse('2024-12-01T10:00:00Z'),
+      newFiles: [{ name: 'WW_Moonberry_Juniper_Petal.package', updatedAt: Date.parse('2026-09-11T11:55:39Z') }],
+    });
+    // The list was read once, and no file was ever asked for.
+    expect(fetcher.calls.filter((u) => u === chooser)).toHaveLength(1);
+    expect(fetcher.calls.filter((u) => /[?&]r=/.test(u))).toEqual([]);
+
+    // A single-file entry's button is the download: never followed, and the page keeps its date.
+    const single = new FakeFetcher({ ...routes, [lab]: edited(pages.LOVERSLAB_FILE_SINGLE) });
+    const { result: plain } = await runCheck({ dirs: [mods], fetcher: single });
+    expect(plain.creators.find((c) => c.key === 'moonberry')!.status).toBe('update-available');
+    expect(single.calls.filter((u) => u.includes('do=download'))).toEqual([]);
   });
 
   it('with wicked.cc off, uses pages found earlier without searching it again', async () => {

@@ -209,3 +209,22 @@ async function downloadMega(url: string, dir: string, onProgress: ProgressFn, si
   }
   return path;
 }
+
+/**
+ * The files to download from LoversLab's list of an entry's files: its mod files (screenshots and
+ * readmes are skipped), or with `only` just the file of that name. Getting a new file off a page
+ * that also holds the user's pack must not bring the pack's variants, or files they said no to,
+ * along with it; and an update must not bring the page's new packs (`except`, by name) either,
+ * which is how "installing the update" came to add a pack nobody asked for.
+ */
+export function chooserDownloads(listed: readonly { href: string; name: string }[], only?: string, except: readonly string[] = []): string[] {
+  if (only) {
+    const file = listed.find((f) => f.name.toLowerCase() === only.toLowerCase());
+    if (!file) throw new DownloadUnavailableError(`${only} isn't on the LoversLab page any more. Open the page to check.`);
+    return [file.href];
+  }
+  const left = new Set(except.map((n) => n.toLowerCase()));
+  const files = listed.filter((f) => (!f.name || DOWNLOADABLE.test(f.name)) && !left.has(f.name.toLowerCase())).map((f) => f.href);
+  if (!files.length && left.size) throw new DownloadUnavailableError('This page only has files you set aside. Open the page to check.');
+  return files;
+}

@@ -12,14 +12,15 @@ import type {
 } from '../shared/types.js';
 import { applyMutedSources } from '../shared/muted.js';
 import { UPDATE_SITES } from '../shared/types.js';
-import { creatorStatus, isNewer } from './compare.js';
+import { creatorStatus, isNewer, outdatedRemotes } from './compare.js';
 import { type CreatorGroup, groupByCreator, matchName, normalizeName } from './creators.js';
-import { BrowserUnavailableError, CancelledError, type Fetcher, throwIfCancelled, VerificationRequiredError } from './fetcher.js';
+import { BrowserUnavailableError, CancelledError, type Fetcher, isChallengePage, throwIfCancelled, VerificationRequiredError } from './fetcher.js';
 import { readGameInfo } from './game.js';
 import { classifyRemotes, datePacks } from './ownership.js';
+import { datePageByFiles } from './pack-files.js';
 import { BUNDLED_OVERRIDES, type Overrides } from './overrides.js';
 import { type ScanCache, scanDirs } from './scanner.js';
-import { checkLoversLab } from './sources/loverslab.js';
+import { checkLoversLab, parseDownloadChooser } from './sources/loverslab.js';
 import { checkPatreon } from './sources/patreon.js';
 import type { SourceChecker, SourceFindings } from './sources/types.js';
 import { classifyUrl, linkKey, patreonVanity } from './sources/urls.js';
@@ -37,6 +38,8 @@ export interface CreatorLinkPrefs {
   seen?: Record<string, number>;
   /** Sites not to check for this creator, on top of the ones turned off for everyone. */
   mutedSources?: UpdateSite[];
+  /** Files on their pages the user said no thanks to (RemoteInfo.newFiles), by lower-case name. */
+  ignoredFiles?: string[];
 }
 
 export type DiscoveryCache = Record<string, { at: number; urls: string[] }>;
@@ -176,6 +179,7 @@ export async function runCheck(opts: CheckOptions): Promise<CheckOutput> {
       }
       progress('check', ++checked, totalListings(), `${plan.group.name}: ${listing.source}`);
     }
+    await datePagesByFiles(plan.group, remotes, opts);
     const creator = toCreatorResult(plan.group, remotes, opts.dismissed?.[plan.group.key], plan.prefs.seen);
     const mutedSources = UPDATE_SITES.filter((site) => plan.mutedFound.has(site));
     if (mutedSources.length) creator.mutedSources = mutedSources;
@@ -288,6 +292,33 @@ export function coreResult(files: LocalFile[], ww: WwModPage | undefined, error:
     status,
     error,
   };
+}
+
+/**
+ * Re-dates the creator's LoversLab pages that look newer than their files by the pages' own file
+ * lists (see pack-files.ts). One extra request per such page, and only where the page's download
+ * button opens that list: on a single-file entry it is the download itself. It is asked again on
+ * every check while the page's own date is newer than the user's files, since that date is what
+ * makes the page look behind; nothing is cached across checks.
+ */
+async function datePagesByFiles(group: CreatorGroup, remotes: RemoteInfo[], opts: CheckOptions): Promise<void> {
+  const probe = opts.fetcher.browserProbe;
+  if (!probe) return;
+  const draft = toCreatorResult(group, remotes, opts.dismissed?.[group.key], opts.linkPrefs?.[group.key]?.seen);
+  const behind = outdatedRemotes(draft.remotes, draft.localUpdatedAt, draft.dismissedAt).filter((r) => r.listing.source === 'loverslab' && r.chooserUrl);
+  for (const page of behind) {
+    throwIfCancelled(opts.signal);
+    if (opts.isMuted?.(group.key, 'loverslab')) return;
+    try {
+      const res = await probe(page.listing.url, page.chooserUrl!);
+      if (res.status !== 200 || !res.body || isChallengePage(res.body)) continue;
+      const at = remotes.findIndex((r) => r.listing.url === page.listing.url);
+      if (at >= 0) remotes[at] = datePageByFiles(remotes[at]!, parseDownloadChooser(res.body, page.chooserUrl!), group.files);
+    } catch (err) {
+      // Only the user's Cancel stops the check; anything else leaves the page's own date in place.
+      if (err instanceof CancelledError && (!opts.signal || opts.signal.aborted)) throw err;
+    }
+  }
 }
 
 async function checkListing(

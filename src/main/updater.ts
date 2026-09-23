@@ -7,6 +7,7 @@ import { runBatch, StopBatchError } from '../core/batch.js';
 import { CORE_KEY } from '../core/check.js';
 import { CancelledError, throwIfCancelled } from '../core/fetcher.js';
 import { applyInstall, markUnchanged, planInstall, undoInstall } from '../core/installer.js';
+import { updateExclusions } from '../core/pack-files.js';
 import { isGameRunning } from '../core/process.js';
 import { chooseRemote } from '../core/source-choice.js';
 import type { AppSnapshot, BatchState, StorageInfo, UpdateChoice, UpdatePlan, UpdateStage } from '../shared/api.js';
@@ -37,6 +38,8 @@ interface InstallMeta {
 interface PlanOptions {
   /** Automatic installs: never use LoversLab/Patreon accounts. */
   publicOnly?: boolean;
+  /** Download only the file of this name from the page's list (a new file on a page of theirs). */
+  onlyFile?: string;
 }
 
 export class Updater {
@@ -58,7 +61,7 @@ export class Updater {
   async plan(key: unknown, listingUrl?: unknown, opts: PlanOptions = {}): Promise<UpdatePlan> {
     if (typeof key !== 'string') throw new Error('Expected a creator key');
     const url = typeof listingUrl === 'string' ? listingUrl : undefined;
-    const id = `${key}|${url ?? ''}|${opts.publicOnly ? 'public' : 'any'}`;
+    const id = `${key}|${url ?? ''}|${opts.publicOnly ? 'public' : 'any'}|${opts.onlyFile ?? ''}`;
     const pending = this.preparing.get(id);
     if (pending) return pending;
     const promise = this.exclusive(() => this.prepare(key, url, opts)).finally(() => this.preparing.delete(id));
@@ -254,6 +257,18 @@ export class Updater {
       await this.discardPlans(key);
       const label = SOURCE_LABEL[remote.listing.source];
       progress('resolving', `Finding the download on ${label}…`);
+      if (opts.onlyFile && remote.listing.source !== 'loverslab') throw new Error('Only LoversLab pages offer single files.');
+      // Installed files are looked for among everything scanned, not one creator's: a file got from
+      // their page can be filed under another author (as a pack's Simlish edition was), or under
+      // none at all (a script, or a package that names no author).
+      const except = opts.onlyFile
+        ? []
+        : updateExclusions(remote, this.controller.currentState.linkPrefs[String(key)]?.ignoredFiles ?? [], this.controller.installedFiles());
+      const offer = opts.onlyFile
+        ? await resolveOffer(remote, pool, { probe: true, only: opts.onlyFile, signal: abort.signal })
+        : except.length
+          ? await resolveOffer(remote, pool, { probe: true, except, signal: abort.signal })
+          : offers.get(remote.listing.url);
       const downloads = await downloadForRemote(
         remote,
         join(workDir, 'download'),
@@ -263,7 +278,7 @@ export class Updater {
           progress('downloading', `Downloading from ${label}${which} ${bytes(received)}${total ? ` of ${bytes(total)}` : ''}`, received, total);
         },
         abort.signal,
-        offers.get(remote.listing.url),
+        offer,
       );
       throwIfCancelled(abort.signal);
 

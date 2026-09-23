@@ -17,7 +17,7 @@ import {
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { type CreatorResult, type RemoteInfo, UPDATE_SITES, type UpdateSite } from '../../shared/types';
 import { ownedRemotes } from '../../shared/updatable';
-import { AFTER_CHECK, gettableNewPack, newPacksFor, rowAction, rowStatus, rowSummary, siteList } from './eligibility';
+import { AFTER_CHECK, gettableNewPack, type NewFile, newFilesFor, newPacksFor, rowAction, rowStatus, rowSummary, siteList } from './eligibility';
 import { formatVersion } from '../../shared/version';
 import { formatShortDate, plural, remoteSummary, shortTitle, SOURCE_LABEL, timeAgo } from './format';
 import { useToast } from './toast';
@@ -85,6 +85,7 @@ function CreatorRow({
   const busy = progress !== undefined && progress.stage !== 'done' && progress.stage !== 'error';
   const sources = [...new Set(c.remotes.map((r) => SOURCE_LABEL[r.listing.source]))];
   const packs = newPacksFor(c, snapshot);
+  const files = newFilesFor(c, snapshot);
 
   return (
     <li className={`creator ${expanded ? 'expanded' : ''}`}>
@@ -94,9 +95,9 @@ function CreatorRow({
           <span className="creator-sub faint">
             {/* Never a status marker and never the Update button: a pack you don't have isn't an
                 update. It sits on the creator's own line, where it can't be read as one. */}
-            {packs.length > 0 && !pending && (
+            {packs.length + files.length > 0 && !pending && (
               <span className="tag new-packs-tag">
-                <PackagePlus size={12} aria-hidden="true" /> {plural(packs.length, 'new pack')}
+                <PackagePlus size={12} aria-hidden="true" /> {plural(packs.length + files.length, 'new pack')}
               </span>
             )}
             {plural(c.files.length, 'file')}
@@ -174,6 +175,7 @@ function CreatorDetails({
   // list is switched on: they need different words and different buttons.
   const pages = ownedRemotes(c.remotes);
   const packs = newPacksFor(c, snapshot);
+  const files = newFilesFor(c, snapshot);
   const hiddenPacks = c.remotes.length - pages.length;
 
   return (
@@ -217,6 +219,20 @@ function CreatorDetails({
           <div className="source-grid">
             {packs.map((r) => (
               <NewPackCard key={r.listing.url} remote={r} creator={c} app={app} hideTitle={hideTitles} onUpdate={onUpdate} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {files.length > 0 && (
+        <>
+          <div className="section-label">New on {files.length === 1 ? 'a page' : 'pages'} of theirs</div>
+          <p className="muted small">
+            {files.length === 1 ? 'This file was' : 'These files were'} added to a page that also has one of your packs - Not counted as an update, and 'Update all' leaves {files.length === 1 ? 'it' : 'them'} alone.
+          </p>
+          <div className="source-grid">
+            {files.map((f) => (
+              <NewFileCard key={`${f.remote.listing.url} ${f.name}`} file={f} creator={c} app={app} hideTitle={hideTitles} onUpdate={onUpdate} />
             ))}
           </div>
         </>
@@ -435,6 +451,82 @@ function NewPackCard({
         </Button>
       ) : (
         // Patrons-only: a download button here would only ever 403.
+        <Button size="sm" icon={ExternalLink} onClick={() => app.run(() => api.openExternal(r.listing.url))} onContextMenu={linkMenu(app, r.listing.url)}>
+          Open page
+        </Button>
+      )}
+      <MenuButton
+        label={`More for ${name}`}
+        items={[
+          ...(gettable ? [{ label: 'Open page', icon: ExternalLink, onSelect: () => void app.run(() => api.openExternal(r.listing.url)) }] : []),
+          { label: 'Open privately or copy link…', icon: Copy, onSelect: () => void app.run(() => api.showLinkMenu(r.listing.url)) },
+          { label: 'Not interested', icon: BellOff, danger: true, onSelect: () => void notInterested() },
+        ]}
+      />
+    </div>
+  );
+}
+
+/**
+ * A file the user doesn't have on a page that also holds their pack (RemoteInfo.newFiles). Unlike
+ * a new pack's page, "Not interested" can't remove the page, which would stop following their pack
+ * too: it sets this one file aside by name.
+ */
+function NewFileCard({
+  file,
+  creator,
+  app,
+  hideTitle,
+  onUpdate,
+}: {
+  file: NewFile;
+  creator: CreatorResult;
+  app: AppModel;
+  hideTitle: boolean;
+  onUpdate: (target: UpdateTarget) => void;
+}) {
+  const toast = useToast();
+  const snapshot = app.snapshot!;
+  const r = file.remote;
+  const label = SOURCE_LABEL[r.listing.source];
+  // A file name says what's in it, so it follows "Hide page titles" like a page title does.
+  const name = hideTitle ? `New file on the ${label} page` : file.name;
+  const progress = app.updates[creator.key];
+  const busy = progress !== undefined && progress.stage !== 'done' && progress.stage !== 'error';
+  const gettable = gettableNewPack(r, snapshot);
+
+  const notInterested = async (): Promise<void> => {
+    const done = await app.run(() => api.setFileIgnored(creator.key, file.name, true));
+    if (!done) return;
+    toast({
+      text: `WhimWatch won't mention ${hideTitle ? 'that file' : shortTitle(file.name, 40)} again`,
+      action: { label: 'Undo', run: () => void app.run(() => api.setFileIgnored(creator.key, file.name, false)) },
+    });
+  };
+
+  return (
+    <div className="source-card new-pack">
+      <span className="site-badge" aria-hidden="true">
+        {SITE_BADGE[r.listing.source]}
+      </span>
+      <div className="source-text">
+        <span className="source-title" title={name}>
+          {name}
+        </span>
+        <span className="source-sub faint">{formatShortDate(file.updatedAt)} · not in your folders</span>
+      </div>
+      {gettable ? (
+        <Button
+          size="sm"
+          icon={Download}
+          disabled={busy || snapshot.running}
+          title={snapshot.running ? AFTER_CHECK : undefined}
+          // The page holds their pack and its variants too: download this one file, nothing else.
+          onClick={() => onUpdate({ key: creator.key, name: creator.name, listingUrl: r.listing.url, packName: hideTitle ? undefined : file.name, fileName: file.name })}
+        >
+          Get it
+        </Button>
+      ) : (
         <Button size="sm" icon={ExternalLink} onClick={() => app.run(() => api.openExternal(r.listing.url))} onContextMenu={linkMenu(app, r.listing.url)}>
           Open page
         </Button>

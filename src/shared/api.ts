@@ -83,6 +83,8 @@ export interface AppSnapshot {
   rejectedLinks: Record<string, string[]>;
   /** Creator key → sites turned off for that creator only (see AppSettings.mutedSources for everyone). */
   creatorMutedSources: Record<string, UpdateSite[]>;
+  /** Creator key → new files on their pages the user isn't interested in, by lower-case name. */
+  ignoredFiles: Record<string, string[]>;
   browsers: LinkBrowser[];
   /** Folder that holds a backup subfolder for each update. */
   backupRoot: string;
@@ -218,6 +220,8 @@ export interface WhimWatchApi {
   undoRejectLink(key: string, url: string): Promise<AppSnapshot>;
   /** Turns one site off (or back on) for one creator. */
   setCreatorSite(key: string, site: UpdateSite, on: boolean): Promise<AppSnapshot>;
+  /** "Not interested" in a new file on one of the creator's pages (RemoteInfo.newFiles), or its undo. */
+  setFileIgnored(key: string, name: string, ignored: boolean): Promise<AppSnapshot>;
   openExternal(url: string): Promise<void>;
   /** Native context menu for a link: open, open privately, copy. */
   showLinkMenu(url: string): Promise<void>;
@@ -232,7 +236,8 @@ export interface WhimWatchApi {
   signIn(site: BrowserSite): Promise<AccountStatus>;
   signOut(site: BrowserSite): Promise<AccountStatus>;
   /** Downloads and prepares an update; `listingUrl` picks the source (default: newest downloadable). */
-  planUpdate(key: string, listingUrl?: string): Promise<UpdatePlan>;
+  /** With `fileName`, only that file from the page's list of files (see RemoteInfo.newFiles). */
+  planUpdate(key: string, listingUrl?: string, fileName?: string): Promise<UpdatePlan>;
   applyUpdate(planId: string, choice: UpdateChoice): Promise<AppSnapshot>;
   undoInstall(id: string): Promise<AppSnapshot>;
   /** Undoes every install from one "Update all" (or automatic) run, newest first. */
@@ -290,6 +295,7 @@ export const API_METHODS = [
   'rejectLink',
   'undoRejectLink',
   'setCreatorSite',
+  'setFileIgnored',
   'openExternal',
   'showLinkMenu',
   'openBackupFolder',

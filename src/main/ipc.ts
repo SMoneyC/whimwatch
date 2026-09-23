@@ -30,6 +30,7 @@ export function registerIpc(controller: AppController, updater: Updater, isTrust
     rejectLink: (key, url) => controller.rejectLink(key, url),
     undoRejectLink: (key, url) => controller.undoRejectLink(key, url),
     setCreatorSite: (key, site, on) => controller.setCreatorSite(key, site, on),
+    setFileIgnored: (key, name, ignored) => controller.setFileIgnored(key, name, ignored),
     openExternal: (url) => controller.openExternal(url),
     showLinkMenu: (url) => controller.showLinkMenu(url),
     openBackupFolder: (id) => controller.openBackupFolder(id),
@@ -39,7 +40,8 @@ export function registerIpc(controller: AppController, updater: Updater, isTrust
     dismissVerification: (site) => controller.dismissVerification(site),
     signIn: (site) => controller.signIn(site),
     signOut: (site) => controller.signOut(site),
-    planUpdate: (key, listingUrl) => updater.plan(key, listingUrl),
+    planUpdate: (key, listingUrl, fileName) =>
+      updater.plan(key, listingUrl, { onlyFile: typeof fileName === 'string' && fileName.length > 0 && fileName.length <= 255 ? fileName : undefined }),
     applyUpdate: (planId, choice) => updater.apply(planId, choice),
     undoInstall: (id) => updater.undo(id),
     undoBatch: (batchId) => updater.undoBatch(batchId),

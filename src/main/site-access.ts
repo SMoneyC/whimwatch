@@ -2,6 +2,15 @@ import { type Fetcher, HostQueue, type HttpResponse, isChallengePage, politeGap,
 import type { BrowserSite } from '../shared/api.js';
 import { VerificationGate } from './verification.js';
 
+/** fetch() run in a site's page that reads HTML only; see Fetcher.browserProbe. */
+export function probeScript(url: string): string {
+  return `fetch(${JSON.stringify(url)}, { credentials: 'include' }).then(async (r) => {
+    const type = r.headers.get('content-type') || '';
+    if (!type.includes('text/html')) { if (r.body) r.body.cancel(); return { status: r.status, type, body: '' }; }
+    return { status: r.status, type, body: await r.text() };
+  })`;
+}
+
 /**
  * The browser bits this needs, as little of them as possible. BrowserPool is
  * the real one, on top of Electron windows; tests stand in their own, which is
@@ -58,6 +67,8 @@ export class SiteAccess {
               .then(async (r) => ({ status: r.status, body: await r.text() }))`,
           ),
         ),
+      browserProbe: (pageUrl, url) =>
+        this.run(siteOf(pageUrl), url, (site) => this.browser.runScript<{ status: number; type: string; body: string }>(site, pageUrl, probeScript(url))),
     };
   }
 

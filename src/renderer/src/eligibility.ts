@@ -46,6 +46,23 @@ export function newPacksFor(c: CreatorResult, snapshot: AppSnapshot): RemoteInfo
   return snapshot.settings.showNewPacks ? newPacks(c.remotes) : [];
 }
 
+/** A file on one of their pages that they don't have: see RemoteInfo.newFiles. */
+export interface NewFile {
+  remote: RemoteInfo;
+  name: string;
+  updatedAt?: number;
+}
+
+/**
+ * New files on pages that also hold a pack of theirs, leaving out the ones they said no to. Shown
+ * with packs they don't have, and under the same setting: it's the same thing, one page along.
+ */
+export function newFilesFor(c: CreatorResult, snapshot: AppSnapshot): NewFile[] {
+  if (!snapshot.settings.showNewPacks) return [];
+  const ignored = new Set(snapshot.ignoredFiles?.[c.key] ?? []);
+  return c.remotes.flatMap((remote) => (remote.newFiles ?? []).filter((f) => !ignored.has(f.name.toLowerCase())).map((f) => ({ remote, ...f })));
+}
+
 /** A new pack can be downloaded when its own page can be: locked Patreon posts can only be opened. */
 export function gettableNewPack(remote: RemoteInfo, snapshot: AppSnapshot): boolean {
   return updatableRemotes([remote], signedInCheck(snapshot)).length > 0;

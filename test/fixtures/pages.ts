@@ -109,3 +109,27 @@ export const LOVERSLAB_CHOOSER = `<!doctype html><html><body>
   </li>
 </ul></div>
 </body></html>`;
+
+/**
+ * The entry page's main download button, as LoversLab shows it for several files (it opens the
+ * list in a dialog) and for one (it is the download itself).
+ */
+const LOVERSLAB_BUTTON = '<a href="https://www.loverslab.com/files/file/3528-moonberry-animations/?do=download" class="ipsButton ipsButton_fullWidth ipsButton_large ipsButton_important"';
+export const LOVERSLAB_FILE_SEVERAL = LOVERSLAB_FILE.replace('</body>', `${LOVERSLAB_BUTTON} data-ipsDialog data-datalayer-postfetch>Download this file</a></body>`);
+export const LOVERSLAB_FILE_SINGLE = LOVERSLAB_FILE.replace('</body>', `${LOVERSLAB_BUTTON} data-datalayer-postfetch>Download this file</a></body>`);
+
+/** The file list with each file's own upload date, as the dialog shows it. */
+export const LOVERSLAB_CHOOSER_DATED = `<div data-controller="downloads.front.view.download"><div class="ipsPad">
+<h1 class="ipsType_pageTitle">Download your files</h1><p class="ipsType_reset ipsType_normal ipsType_light">2 files</p>
+<ul class="ipsDataList ipsDataList_reducedSpacing">
+  <li class="ipsDataItem">
+    <div class="ipsDataItem_main"><h4 class="ipsDataItem_title ipsContained_container"><span class="ipsType_break ipsContained">WW_Moonberry_Animations.package</span></h4>
+    <p class="ipsType_reset ipsDataItem_meta"> 360.67 MB <span class="ipsType_neutral"> / <time datetime="2026-07-30T13:30:28Z" title="07/30/26 09:30 AM" data-short="Jul 30">July 30</time></span></p></div>
+    <div class="ipsDataItem_generic ipsDataItem_size4 ipsType_right"><a href="https://www.loverslab.com/files/file/3528-moonberry-animations/?do=download&amp;r=2001&amp;confirm=1&amp;t=1&amp;csrfKey=abc" class="ipsButton ipsButton_primary ipsButton_small" data-action="download">Download</a></div>
+  </li>
+  <li class="ipsDataItem">
+    <div class="ipsDataItem_main"><h4 class="ipsDataItem_title ipsContained_container"><span class="ipsType_break ipsContained">WW_Moonberry_Juniper_Petal.package</span></h4>
+    <p class="ipsType_reset ipsDataItem_meta"> 42.28 MB <span class="ipsType_neutral"> / <time datetime="2026-09-11T11:55:39Z" title="09/11/26 07:55 AM" data-short="Sep 11">September 11</time></span></p></div>
+    <div class="ipsDataItem_generic ipsDataItem_size4 ipsType_right"><a href="https://www.loverslab.com/files/file/3528-moonberry-animations/?do=download&amp;r=2002&amp;confirm=1&amp;t=1&amp;csrfKey=abc" class="ipsButton ipsButton_primary ipsButton_small" data-action="download">Download</a></div>
+  </li>
+</ul></div></div>`;

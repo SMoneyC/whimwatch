@@ -1,5 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { fileNameFrom, isAllowedDownloadHost, safeFileName } from '../src/core/downloads.js';
+import { chooserDownloads, DownloadUnavailableError, fileNameFrom, isAllowedDownloadHost, safeFileName } from '../src/core/downloads.js';
+
+describe("picking files off a LoversLab page's list", () => {
+  const listed = [
+    { href: 'r=1', name: 'WW_Moonberry_Animations.package' },
+    { href: 'r=2', name: 'WW_Moonberry_Juniper_Petal.package' },
+    { href: 'r=3', name: 'WW_Moonberry_Animations_NoSound.package' },
+    { href: 'r=4', name: 'preview.jpg' },
+  ];
+
+  it('gets every mod file for an update', () => {
+    expect(chooserDownloads(listed)).toEqual(['r=1', 'r=2', 'r=3']);
+  });
+
+  it('gets only the one file asked for, never the pack beside it or its variants', () => {
+    expect(chooserDownloads(listed, 'ww_moonberry_juniper_petal.package')).toEqual(['r=2']);
+    expect(() => chooserDownloads(listed, 'WW_Moonberry_Thornwood.package')).toThrow(DownloadUnavailableError);
+  });
+
+  it("leaves the page's new packs and the files they said no to out of an update", () => {
+    expect(chooserDownloads(listed, undefined, ['ww_moonberry_juniper_petal.package', 'WW_Moonberry_Animations_NoSound.package'])).toEqual(['r=1']);
+    expect(() => chooserDownloads(listed.slice(1, 2), undefined, ['WW_Moonberry_Juniper_Petal.package'])).toThrow(DownloadUnavailableError);
+  });
+});
 
 describe('download helpers', () => {
   it.each([

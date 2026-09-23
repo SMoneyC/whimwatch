@@ -3,6 +3,7 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as cheerio from 'cheerio';
 import {
+  chooserDownloads,
   DOWNLOADABLE,
   DownloadUnavailableError,
   downloadExternal,
@@ -64,16 +65,25 @@ export async function downloadForRemote(
  * download button is looked at too, so the number of files is known (used only
  * to break ties between sources; it costs one extra request).
  */
-export async function resolveOffer(remote: RemoteInfo, pool: BrowserPool, opts: { probe: boolean; signal?: AbortSignal }): Promise<Offer> {
+export async function resolveOffer(
+  remote: RemoteInfo,
+  pool: BrowserPool,
+  opts: { probe: boolean; only?: string; except?: readonly string[]; signal?: AbortSignal },
+): Promise<Offer> {
   if (remote.listing.source === 'patreon') return patreonOffer(remote, pool, opts.signal);
   if (remote.listing.source !== 'loverslab') throw new DownloadUnavailableError('This source has no downloads.');
   const offer = await loversLabOffer(remote.listing.url, pool, opts.signal);
-  if (!opts.probe || !('button' in offer)) return offer;
+  // One file by name needs the list of files to pick it from.
+  if ((!opts.probe && !opts.only) || !('button' in offer)) {
+    if (opts.only) throw new DownloadUnavailableError(`${opts.only} can't be picked out of this LoversLab page. Open the page to get it.`);
+    return offer;
+  }
 
   const probe = await pool.probeInPage(remote.listing.url, offer.button);
   throwIfCancelled(opts.signal);
   if (probe.status >= 400) throw new Error(`LoversLab returned HTTP ${probe.status}`);
-  return probe.body ? chooserOffer(probe.body, remote.listing.url) : { files: [offer.button] };
+  if (!probe.body && opts.only) throw new DownloadUnavailableError(`${opts.only} can't be picked out of this LoversLab page. Open the page to get it.`);
+  return probe.body ? chooserOffer(probe.body, remote.listing.url, opts.only, opts.except) : { files: [offer.button] };
 }
 
 export function offerFileCount(offer: Offer): number {
@@ -95,10 +105,9 @@ async function loversLabOffer(fileUrl: string, pool: BrowserPool, signal?: Abort
   throw new DownloadUnavailableError('No download button on the LoversLab page. The files may be hosted elsewhere; open the page to check.');
 }
 
-/** Mod files listed on LoversLab's chooser page (screenshots and readmes are skipped). */
-function chooserOffer(html: string, pageUrl: string): Offer {
-  const listed = parseDownloadChooser(html, pageUrl);
-  const files = listed.filter((f) => !f.name || DOWNLOADABLE.test(f.name)).map((f) => f.href);
+/** The files to get from LoversLab's list of an entry's files; see chooserDownloads. */
+function chooserOffer(html: string, pageUrl: string, only?: string, except?: readonly string[]): Offer {
+  const files = chooserDownloads(parseDownloadChooser(html, pageUrl), only, except);
   if (!files.length) throw new DownloadUnavailableError('The LoversLab page has no mod files to download.');
   return { files };
 }

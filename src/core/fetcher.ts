@@ -21,6 +21,11 @@ export interface Fetcher {
   browserGet?(url: string): Promise<HttpResponse>;
   /** Runs fetch() inside a loaded page (same origin, its cookies). */
   browserFetch?(pageUrl: string, apiUrl: string): Promise<{ status: number; body: string }>;
+  /**
+   * Like browserFetch, but reads the body only when it's HTML: anything else is cancelled unread,
+   * so asking a download link what it answers can never download the file.
+   */
+  browserProbe?(pageUrl: string, url: string): Promise<{ status: number; type: string; body: string }>;
 }
 
 /** The user cancelled the check or update. */

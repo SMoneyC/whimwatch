@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isChallengePage } from '../src/core/fetcher.js';
-import { checkLoversLab, parseDownloadChooser, parseLoversLabFile } from '../src/core/sources/loverslab.js';
+import { checkLoversLab, chooserFor, parseDownloadChooser, parseLoversLabFile } from '../src/core/sources/loverslab.js';
 import { formatVersion } from '../src/shared/version.js';
 import {
   linkedPostIds,
@@ -92,7 +92,35 @@ describe('LoversLab', () => {
       updatedAt: Date.parse('2024-04-10T21:52:40Z'),
       publishedAt: undefined,
       patreonLinks: ['https://www.patreon.com/Tester'],
+      chooserUrl: undefined,
     });
+  });
+
+  it('tells a download button that opens the file list from one that downloads the file', () => {
+    expect(parseLoversLabFile(pages.LOVERSLAB_FILE_SEVERAL).chooserUrl).toBe('https://www.loverslab.com/files/file/3528-moonberry-animations/?do=download');
+    // One file: the button is the download, which a check must never follow.
+    expect(parseLoversLabFile(pages.LOVERSLAB_FILE_SINGLE).chooserUrl).toBeUndefined();
+  });
+
+  it('follows a file list only on LoversLab itself, over https, for the same file', () => {
+    const page = 'https://www.loverslab.com/files/file/3528-moonberry-animations/';
+    expect(chooserFor('/files/file/3528-moonberry-animations/?do=download', page, page)).toBe(`${page}?do=download`);
+    for (const href of [
+      'https://other.example/files/file/3528-x/?do=download',
+      'https://loverslab.com.evil.example/files/file/3528-x/?do=download',
+      'http://www.loverslab.com/files/file/3528-x/?do=download',
+      'https://www.loverslab.com/files/file/9999-other/?do=download',
+      'https://[not an address',
+    ]) {
+      expect(chooserFor(href, page, page), href).toBeUndefined();
+    }
+  });
+
+  it("reads each file's own date from the file list", () => {
+    expect(parseDownloadChooser(pages.LOVERSLAB_CHOOSER_DATED, 'https://www.loverslab.com/files/file/3528-moonberry-animations/').map(({ name, updatedAt }) => ({ name, updatedAt }))).toEqual([
+      { name: 'WW_Moonberry_Animations.package', updatedAt: Date.parse('2026-07-30T13:30:28Z') },
+      { name: 'WW_Moonberry_Juniper_Petal.package', updatedAt: Date.parse('2026-09-11T11:55:39Z') },
+    ]);
   });
 
   it('lists every file on the download chooser', () => {

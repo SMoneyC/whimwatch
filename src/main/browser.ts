@@ -12,7 +12,7 @@ import {
 import type { BrowserSite } from '../shared/api.js';
 import { allowHiddenRequest, SITE_DOMAINS } from './request-filter.js';
 import { SiteSessionMode } from './session-mode.js';
-import { SiteAccess, type SiteBrowser } from './site-access.js';
+import { probeScript, SiteAccess, type SiteBrowser } from './site-access.js';
 
 export type { BrowserSite };
 
@@ -384,14 +384,7 @@ export class BrowserPool implements SiteBrowser {
    * so probing a download link never triggers a download.
    */
   probeInPage(pageUrl: string, url: string): Promise<{ status: number; type: string; body: string }> {
-    return this.runInPage(
-      pageUrl,
-      `fetch(${JSON.stringify(url)}, { credentials: 'include' }).then(async (r) => {
-        const type = r.headers.get('content-type') || '';
-        if (!type.includes('text/html')) { if (r.body) r.body.cancel(); return { status: r.status, type, body: '' }; }
-        return { status: r.status, type, body: await r.text() };
-      })`,
-    );
+    return this.runInPage(pageUrl, probeScript(url));
   }
 
   /**

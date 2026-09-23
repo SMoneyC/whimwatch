@@ -105,6 +105,17 @@ export interface RemoteInfo {
   remoteSize?: number;
   /** How many files the download offers, when known without extra requests (wicked.cc: 1). */
   fileCount?: number;
+  /**
+   * LoversLab: where the download button leads when it opens a list of the entry's files rather
+   * than downloading one, so that list can be read without downloading anything.
+   */
+  chooserUrl?: string;
+  /**
+   * LoversLab: files on the page you don't have, with their own dates, read from its file list when
+   * the page looked newer than your files. Usually a new pack put on the same page, which moved the
+   * page's date without touching yours; see core/pack-files.ts.
+   */
+  newFiles?: { name: string; updatedAt?: number }[];
   error?: string;
 }
 

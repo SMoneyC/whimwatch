@@ -19,6 +19,8 @@ export interface UpdateTarget {
   listingUrl?: string;
   /** That page's name, so the dialog is about the pack rather than the creator. */
   packName?: string;
+  /** A new file on a page of theirs: download just this one, not the page's other files. */
+  fileName?: string;
 }
 
 const isGameWarning = (w: string): boolean => w.startsWith('The Sims 4 is running');
@@ -61,7 +63,7 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
 
   useEffect(() => {
     let cancelled = false;
-    api.planUpdate(target.key, sourceUrl).then(
+    api.planUpdate(target.key, sourceUrl, target.fileName).then(
       (p) => {
         if (cancelled) return;
         setPlan(p);
@@ -72,7 +74,7 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
     return () => {
       cancelled = true;
     };
-  }, [target.key, sourceUrl]);
+  }, [target.key, sourceUrl, target.fileName]);
 
   // "Close the game to install": look again whenever the user comes back to the window, and every few seconds.
   useEffect(() => {
@@ -168,8 +170,10 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
   const packPage = newPack ? creator?.remotes.find((r) => r.listing.url === target.listingUrl) : undefined;
   /** The page the creator's "Update ready" is about: the one whose date the row is showing. */
   const behindPage = creator?.remotes.find((r) => r.owned !== 'no' && r.updatedAt === creator.remoteUpdatedAt);
+  // A new file on a page of theirs has its own date; the page's is their pack's.
+  const postedAt = target.fileName ? packPage?.newFiles?.find((f) => f.name === target.fileName)?.updatedAt : packPage?.updatedAt;
   const subtitle = newPack
-    ? `From ${target.name}${packPage?.updatedAt !== undefined ? ` · posted ${formatShortDate(packPage.updatedAt)}` : ''}`
+    ? `From ${target.name}${postedAt !== undefined ? ` · posted ${formatShortDate(postedAt)}` : ''}`
     : target.key !== CORE_KEY && creator?.remoteUpdatedAt !== undefined
       ? // Against the files from this pack where the page named them, not the creator's newest file:
         // "you have files from Sep 17" under a pack you last updated in 2024 helps nobody.

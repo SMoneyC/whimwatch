@@ -22,6 +22,7 @@ import { catchUpCreator, CORE_KEY, coreResult, refreshCreatorStatus, runCheck, u
 import { isNewer, outdatedRemotes, seenMark } from '../core/compare.js';
 import { groupByCreator } from '../core/creators.js';
 import { datePacks } from '../core/ownership.js';
+import { dropInstalledFiles } from '../core/pack-files.js';
 import { BUNDLED_OVERRIDES, loadOverrides, type Overrides } from '../core/overrides.js';
 import { filesFromCache, rescanPaths, type ScanCache, scanDirs } from '../core/scanner.js';
 import { classifyUrl, linkKey, linkProblem, normalizeUserUrl } from '../core/sources/urls.js';
@@ -251,6 +252,7 @@ export class AppController {
       manualLinks: Object.fromEntries(Object.entries(s.linkPrefs).map(([k, v]) => [k, v.manual])),
       rejectedLinks: Object.fromEntries(Object.entries(s.linkPrefs).map(([k, v]) => [k, v.rejected])),
       creatorMutedSources: Object.fromEntries(Object.entries(s.linkPrefs).flatMap(([k, v]) => (v.mutedSources?.length ? [[k, v.mutedSources]] : []))),
+      ignoredFiles: Object.fromEntries(Object.entries(s.linkPrefs).flatMap(([k, v]) => (v.ignoredFiles?.length ? [[k, v.ignoredFiles]] : []))),
       browsers: (await installedBrowsers()).map(({ id, name, privateLabel, isDefault }) => ({ id, name, privateLabel, isDefault })),
       backupRoot: this.backupRoot,
       batch: this.batch,
@@ -280,6 +282,14 @@ export class AppController {
 
   get currentState(): AppState {
     return this.state;
+  }
+
+  /**
+   * Every mod file in the folders as last scanned, including scripts and packages that name no
+   * author and so sit under no creator. The same list the rescan after an install uses.
+   */
+  installedFiles(): LocalFile[] {
+    return filesFromCache(this.scanCache) ?? this.state.lastResult?.creators.flatMap((c) => c.files) ?? [];
   }
 
   /**
@@ -468,6 +478,9 @@ export class AppController {
       // Left alone it keeps the pre-install date and the page stays flagged for ever.
       creator.remotes = datePacks(group, creator.remotes);
     }
+    // A new file installed with Get it can end up under another creator (its tuning names another
+    // author), so it's looked for among all the files, not just this creator's.
+    for (const creator of result.creators) creator.remotes = creator.remotes.map((r) => dropInstalledFiles(r, files));
     const core = coreResult(files, undefined, result.core.error, this.state.dismissed[CORE_KEY]);
     Object.assign(result.core, { installed: core.installed, installedFiles: core.installedFiles });
     this.refreshStatuses();
@@ -651,6 +664,20 @@ export class AppController {
     prefs.mutedSources = UPDATE_SITES.filter((x) => muted.has(x));
     if (!prefs.mutedSources.length) delete prefs.mutedSources;
     this.applyMuted();
+    return this.commit();
+  }
+
+  /**
+   * "Not interested" in a new file on one of the creator's pages, kept by name so the next check
+   * doesn't offer it again. Only the name is stored; the page, and the user's pack on it, stay.
+   */
+  async setFileIgnored(key: unknown, name: unknown, ignored: unknown): Promise<AppSnapshot> {
+    const file = str(name).trim().toLowerCase();
+    if (!file || file.length > 255) throw new Error('That file name is not valid.');
+    const prefs = this.prefs(str(key));
+    const rest = (prefs.ignoredFiles ?? []).filter((f) => f !== file);
+    prefs.ignoredFiles = ignored === true ? [...rest, file].slice(-200) : rest;
+    if (!prefs.ignoredFiles.length) delete prefs.ignoredFiles;
     return this.commit();
   }
 
