@@ -948,7 +948,11 @@ export class AppController {
 
   async signIn(site: unknown): Promise<AccountStatus> {
     const status = await signIn(browserSite(site), this.window);
-    this.pool.reset(status.site);
+    // Not mid-check: the site's window is loading a page for it, and the sign-in's cookies reach that
+    // window anyway, being in the same session. Destroying it failed the whole check. The reset also
+    // lifted a hold for a human check, which the sign-in has usually just passed: keep doing that.
+    if (!this.running) this.pool.reset(status.site);
+    else this.pool.clearVerification(status.site);
     await this.commit();
     return status;
   }

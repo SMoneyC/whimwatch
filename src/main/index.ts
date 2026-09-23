@@ -126,7 +126,13 @@ if (process.argv.includes('--smoke')) {
       console.warn('Quick hide shortcut unavailable:', (err as Error).message);
     }
     app.on('will-quit', () => globalShortcut.unregisterAll());
-    app.on('before-quit', () => controller.pool.dispose());
+    app.on('before-quit', () => {
+      // Cancel first: a check whose pages are cut off from outside carries on with the next one, so
+      // closing the windows alone left it opening new ones (and writing cookies) after the exit
+      // clean-up, then saving a result full of errors over the last good one.
+      controller.cancelCheck();
+      controller.pool.dispose();
+    });
     let cleared = false;
     app.on('will-quit', (event) => {
       const { clearBrowsingDataOnExit, forgetSignInsOnExit } = controller.currentState.settings;

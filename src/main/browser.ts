@@ -180,6 +180,8 @@ export class BrowserPool implements SiteBrowser {
   }
 
   window(site: BrowserSite): BrowserWindow {
+    // Quitting: nothing may open a site again once its windows are closed and its data is cleared.
+    if (this.disposing) throw new CancelledError();
     let win = this.windows.get(site);
     if (win && !win.isDestroyed()) return win;
     const ses = useSiteSession(site);

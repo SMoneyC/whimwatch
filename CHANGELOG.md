@@ -12,6 +12,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - A creator with no download pages no longer shows under "Need a look" once every site is turned off for them.
+- Signing in to LoversLab or Patreon while a check is running no longer stops the check with "Check failed: Cancelled". Signing out or clearing browsing data mid-check now only affects the page being loaded at that moment.
 
 ## [0.2.3] - 2026-09-23
 

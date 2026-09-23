@@ -164,7 +164,7 @@ export async function runCheck(opts: CheckOptions): Promise<CheckOutput> {
         progress('check', ++checked, totalListings(), `${plan.group.name}: ${listing.source}`);
         continue;
       }
-      const { info, findings } = await checkListing(listing, opts.fetcher, now);
+      const { info, findings } = await checkListing(listing, opts.fetcher, now, opts.signal);
       if (findings?.expandTo?.length) {
         // An index page: check the packs it lists instead of the index itself.
         for (const url of findings.expandTo) addUrl(add, url, listing.origin);
@@ -294,6 +294,7 @@ async function checkListing(
   listing: Listing,
   fetcher: Fetcher,
   now: () => number,
+  signal?: AbortSignal,
 ): Promise<{ info: RemoteInfo; findings?: SourceFindings }> {
   const checkedAt = now();
   if (listing.source === 'wwmod') return { info: { listing, checkedAt, status: 'error', error: 'Unsupported link' } };
@@ -301,7 +302,16 @@ async function checkListing(
     const { status, author: _author, patreonLinks, expandTo, ...rest } = await CHECKERS[listing.source](listing, fetcher);
     return { info: { listing, checkedAt, status: status ?? 'ok', ...rest }, findings: { patreonLinks, expandTo } };
   } catch (err) {
-    if (err instanceof CancelledError) throw err;
+    if (err instanceof CancelledError) {
+      // Only the user's Cancel stops the check. A page cut off from outside it (signing out, or
+      // clearing browsing data, closes the site's window) is that page's problem: failing the whole
+      // check for it reported "Check failed: Cancelled" to someone who never pressed Cancel.
+      // The check then carries on, so a site signed out of or cleared mid-check gets fresh cookies
+      // from its next page: the check the user started still wants that site. Quitting cancels the
+      // check first, so its clean-up on exit is never followed by more pages.
+      if (!signal || signal.aborted) throw err;
+      return { info: { listing, checkedAt, status: 'error', error: 'Interrupted by signing out or clearing browsing data. Checked again next time.' } };
+    }
     if (err instanceof VerificationRequiredError) {
       return { info: { listing, checkedAt, status: 'needs-verification', error: err.message } };
     }

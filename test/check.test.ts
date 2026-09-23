@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { catchUpCreator, CORE_KEY, refreshCreatorStatus, runCheck } from '../src/core/check.js';
 import { creatorStatus, TOLERANCE_MS } from '../src/core/compare.js';
-import type { Fetcher, HttpResponse } from '../src/core/fetcher.js';
+import { CancelledError, type Fetcher, type HttpResponse } from '../src/core/fetcher.js';
 import { SNIPPET_TUNING_TYPE } from '../src/core/scanner.js';
 import { linkKey } from '../src/core/sources/urls.js';
 import { applyMutedSources, needsCheckAfterUnmute } from '../src/shared/muted.js';
@@ -194,6 +194,29 @@ describe('runCheck', () => {
     expect(fetcher.calls.filter((u) => u.includes('wicked.cc'))).toEqual([]);
     expect(result.creators.find((c) => c.name === 'Tester')).toMatchObject({ remotes: [], mutedSources: ['wickedcc'] });
     expect(result.creators.find((c) => c.name === 'Nobody')!.mutedSources).toBeUndefined();
+  });
+
+  it("keeps going when a page's window is closed under it, and stops only for Cancel", async () => {
+    const lab = 'https://www.loverslab.com/files/file/3528-moonberry-animations/';
+    const cutOff = (fetcher: FakeFetcher, onCut?: () => void): FakeFetcher => {
+      const load = fetcher.browserGet;
+      fetcher.browserGet = async (url: string) => {
+        if (url !== lab) return load(url);
+        onCut?.();
+        // What the pool throws when the site's window is destroyed mid-load (signing out).
+        throw new CancelledError();
+      };
+      return fetcher;
+    };
+
+    const { result } = await runCheck({ dirs: [mods], fetcher: cutOff(new FakeFetcher(ROUTES)), signal: new AbortController().signal });
+    const moonberry = result.creators.find((c) => c.key === 'moonberry')!;
+    expect(moonberry.remotes.find((r) => r.listing.url === lab)).toMatchObject({ status: 'error' });
+    expect(moonberry.remotes.find((r) => r.listing.source === 'wickedcc')).toMatchObject({ status: 'ok' });
+
+    // The user's Cancel: the same error, with the check's own signal aborted.
+    const abort = new AbortController();
+    await expect(runCheck({ dirs: [mods], fetcher: cutOff(new FakeFetcher(ROUTES), () => abort.abort()), signal: abort.signal })).rejects.toBeInstanceOf(CancelledError);
   });
 
   it('with wicked.cc off, uses pages found earlier without searching it again', async () => {
