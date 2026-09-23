@@ -3,6 +3,16 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.4] - 2026-09-23
+
+### Changed
+
+- Update buttons greyed out during a check now say why: they are available when the check finishes.
+
+### Fixed
+
+- A creator with no download pages no longer shows under "Need a look" once every site is turned off for them.
+
 ## [0.2.3] - 2026-09-23
 
 ### Fixed
