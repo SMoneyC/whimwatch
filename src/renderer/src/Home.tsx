@@ -4,7 +4,7 @@ import type { BrowserSite } from '../../shared/api';
 import type { CreatorResult } from '../../shared/types';
 import { CreatorList, type Row } from './CreatorList';
 import { useConfirm } from './dialog';
-import { CORE_KEY, rowStatus, sortCreators, type SortOrder, updateCandidates } from './eligibility';
+import { AFTER_CHECK, CORE_KEY, rowStatus, sortCreators, type SortOrder, updateCandidates } from './eligibility';
 import { formatCount, plural, SOURCE_LABEL, timeAgo } from './format';
 import { OtherFilesDialog } from './OtherFiles';
 import { PlayCard } from './PlayCard';
@@ -259,7 +259,7 @@ export function Home({
                 </Button>
               )}
               {(candidates.eligible.length > 0 || app.batch?.running) && (
-                <Button variant="primary" icon={Download} onClick={onUpdateAll} disabled={running}>
+                <Button variant="primary" icon={Download} onClick={onUpdateAll} disabled={running} title={running ? AFTER_CHECK : undefined}>
                   {app.batch?.running ? 'Updating…' : `Update all ${formatCount(candidates.eligible.length)}`}
                 </Button>
               )}

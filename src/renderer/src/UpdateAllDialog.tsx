@@ -2,7 +2,7 @@ import { Ban, CheckCircle2, Circle, Download, History, Info, LogIn, MinusCircle,
 import { useState } from 'react';
 import type { BatchItem, BatchItemState, BrowserSite } from '../../shared/api';
 import { Dialog, useConfirm } from './dialog';
-import type { Candidate, Ineligible } from './eligibility';
+import { AFTER_CHECK, type Candidate, type Ineligible } from './eligibility';
 import { formatCount, plural, SOURCE_LABEL } from './format';
 import { useToast } from './toast';
 import { api, type AppModel } from './useApp';
@@ -81,7 +81,9 @@ export function UpdateAllDialog({
             <Button variant="quiet" onClick={onClose}>
               Cancel
             </Button>
-            <Button variant="primary" icon={Download} onClick={start} disabled={!selected.length || app.snapshot?.running}>
+            <Button variant="primary" icon={Download} onClick={start} disabled={!selected.length || app.snapshot?.running}
+              title={app.snapshot?.running ? AFTER_CHECK : undefined}
+            >
               Update {formatCount(selected.length)}
             </Button>
           </>

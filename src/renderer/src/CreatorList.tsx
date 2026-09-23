@@ -17,7 +17,7 @@ import {
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { type CreatorResult, type RemoteInfo, UPDATE_SITES, type UpdateSite } from '../../shared/types';
 import { ownedRemotes } from '../../shared/updatable';
-import { gettableNewPack, newPacksFor, rowAction, rowStatus, rowSummary, siteList } from './eligibility';
+import { AFTER_CHECK, gettableNewPack, newPacksFor, rowAction, rowStatus, rowSummary, siteList } from './eligibility';
 import { formatVersion } from '../../shared/version';
 import { formatShortDate, plural, remoteSummary, shortTitle, SOURCE_LABEL, timeAgo } from './format';
 import { useToast } from './toast';
@@ -107,7 +107,10 @@ function CreatorRow({
         <StatusMarker status={status} checking={pending && app.snapshot?.running} />
         <span className="creator-action">
           {action.kind === 'update' && (
-            <Button size="sm" icon={Download} onClick={() => onUpdate({ key: c.key, name: c.name })} disabled={busy || snapshot.running}>
+            <Button size="sm" icon={Download} onClick={() => onUpdate({ key: c.key, name: c.name })}
+              disabled={busy || snapshot.running}
+              title={snapshot.running ? AFTER_CHECK : undefined}
+            >
               Update
             </Button>
           )}
@@ -425,6 +428,7 @@ function NewPackCard({
           size="sm"
           icon={Download}
           disabled={busy || snapshot.running}
+          title={snapshot.running ? AFTER_CHECK : undefined}
           onClick={() => onUpdate({ key: creator.key, name: creator.name, listingUrl: r.listing.url, packName: r.title })}
         >
           Get it

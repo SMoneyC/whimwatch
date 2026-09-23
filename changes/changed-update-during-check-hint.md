@@ -1,0 +1,1 @@
+- Update buttons greyed out during a check now say why: they are available when the check finishes.
