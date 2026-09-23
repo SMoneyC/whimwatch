@@ -48,6 +48,21 @@ main process or Electron's own behaviour, drive the real app (the Electron harne
 probe script against real Electron) rather than reasoning about the code. Real state files under
 `~/.config/WhimWatch` and `%APPDATA%\WhimWatch` beat invented fixtures for reproducing a report.
 
+### Keep live runs few and small
+
+A check contacts wicked.cc, LoversLab and Patreon for every page of every creator in the folders it
+is pointed at. The maintainer's real mods folders hold dozens of creators, so each check against them
+is a burst of traffic that can get their connection or accounts flagged, and takes minutes.
+
+- Never run a check against the real mods folders. Copy the state file into a scratch
+  `--user-data-dir` and point its `dirs` at a scratch folder holding only the files the reproduction
+  needs — one to three creators.
+- Prefer no network at all. Test the core with `FakeFetcher` (`test/check.test.ts`), or stand in for
+  the sites in the real app with `session.protocol.handle('https', …)`. Marking as seen, turning sites
+  off and removing pages can be driven against a saved result without running a check.
+- When a live check really is needed, run one to show the problem and one to show the fix, not one
+  per hypothesis. Ask the maintainer before running more.
+
 ## Before handing back
 
 `npm run lint`, `npm run typecheck`, `npm test`. Add a note in `changes/` for anything a user would
