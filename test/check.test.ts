@@ -2,10 +2,11 @@ import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CORE_KEY, runCheck } from '../src/core/check.js';
+import { catchUpCreator, CORE_KEY, refreshCreatorStatus, runCheck } from '../src/core/check.js';
 import { creatorStatus, TOLERANCE_MS } from '../src/core/compare.js';
 import type { Fetcher, HttpResponse } from '../src/core/fetcher.js';
 import { SNIPPET_TUNING_TYPE } from '../src/core/scanner.js';
+import { linkKey } from '../src/core/sources/urls.js';
 import { applyMutedSources, needsCheckAfterUnmute } from '../src/shared/muted.js';
 import type { CheckResult, CreatorResult, RemoteInfo, UpdateSite } from '../src/shared/types.js';
 import { buildDbpf, wwTuningXml } from './helpers/dbpf-builder.js';
@@ -162,6 +163,39 @@ describe('runCheck', () => {
     expect(byName.Tester!.remotes.map((r) => r.listing.source)).toEqual(['wickedcc']);
   });
 
+  it('never contacts a site turned off while the check runs, from then on', async () => {
+    const fetcher = new FakeFetcher(ROUTES);
+    const off = new Set<string>();
+    const { result } = await runCheck({
+      dirs: [mods],
+      fetcher,
+      isMuted: (key, site) => off.has(`${key}:${site}`),
+      // Tester's Patreon is only found on their wicked.cc page, so it's turned off before it comes up.
+      onProgress: (p) => {
+        if (p.message === 'Tester: wickedcc') off.add('tester:patreon');
+      },
+    });
+    const tester = result.creators.find((c) => c.name === 'Tester')!;
+    expect(fetcher.calls.filter((u) => u.includes('patreon.com'))).toEqual([]);
+    expect(tester.remotes.map((r) => r.listing.source)).toEqual(['wickedcc']);
+    // Noted, so turning it back on says it's checked from the next check.
+    expect(tester.mutedSources).toEqual(['patreon']);
+    expect(result.creators.find((c) => c.name === 'moonberry')!.mutedSources).toBeUndefined();
+  });
+
+  it('with wicked.cc turned off during the check, skips the search and notes only creators with a page there', async () => {
+    const fetcher = new FakeFetcher(ROUTES);
+    const { result } = await runCheck({
+      dirs: [mods],
+      fetcher,
+      isMuted: (_key, site) => site === 'wickedcc',
+      discoveryCache: { tester: { at: 0, urls: ['https://wicked.cc/animations/tester/testers-animations'] } },
+    });
+    expect(fetcher.calls.filter((u) => u.includes('wicked.cc'))).toEqual([]);
+    expect(result.creators.find((c) => c.name === 'Tester')).toMatchObject({ remotes: [], mutedSources: ['wickedcc'] });
+    expect(result.creators.find((c) => c.name === 'Nobody')!.mutedSources).toBeUndefined();
+  });
+
   it('with wicked.cc off, uses pages found earlier without searching it again', async () => {
     const fetcher = new FakeFetcher(ROUTES);
     const { result, discoveryCache } = await runCheck({
@@ -212,6 +246,70 @@ describe('creatorStatus', () => {
   it('distinguishes verification from unknown', () => {
     expect(creatorStatus(local, [remote(0, 'needs-verification')]).status).toBe('needs-verification');
     expect(creatorStatus(local, []).status).toBe('unknown');
+  });
+});
+
+describe('catching up a creator the check just finished', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const local = Date.UTC(2026, 8, 1);
+  const page = (source: UpdateSite, slug: string, updatedAt = local + 10 * DAY): RemoteInfo => ({
+    listing: { source, url: `https://${source}.test/${slug}`, origin: 'directory' },
+    checkedAt: 0,
+    status: 'ok',
+    updatedAt,
+  });
+  // As the check hands it over: built with the choices from when the check started.
+  const finished = (): CreatorResult => {
+    const remotes = [page('wickedcc', 'juniper-petal', local - DAY), page('patreon', 'thornwood')];
+    return { key: 'amberlily', name: 'Amberlily', files: [], localUpdatedAt: local, remotes, ...creatorStatus(local, remotes) };
+  };
+  const none = { rejected: [], mutedSources: [], creatorMuted: [] };
+
+  it('starts out behind, as the check left it', () => {
+    expect(finished().status).toBe('update-available');
+  });
+
+  it('leaves out a page removed meanwhile, and hands it back for Undo', () => {
+    const c = finished();
+    const removed = catchUpCreator(c, { ...none, rejected: ['https://patreon.test/thornwood/'] });
+    expect(removed.map((r) => r.listing.url)).toEqual(['https://patreon.test/thornwood']);
+    expect(c.remotes.map((r) => r.listing.source)).toEqual(['wickedcc']);
+    expect(c.status).toBe('up-to-date');
+  });
+
+  it('sets aside a site turned off meanwhile, for that creator or everyone', () => {
+    for (const choices of [{ ...none, creatorMuted: ['patreon' as const] }, { ...none, mutedSources: ['patreon' as const] }]) {
+      const c = finished();
+      catchUpCreator(c, choices);
+      expect(c).toMatchObject({ mutedSources: ['patreon'], status: 'up-to-date' });
+      expect(c.mutedRemotes!.map((r) => r.listing.source)).toEqual(['patreon']);
+    }
+  });
+
+  it('keeps a page marked as seen meanwhile hidden, even with no link choices when the check started', () => {
+    const c = finished();
+    catchUpCreator(c, { ...none, seen: { [linkKey('https://patreon.test/thornwood')]: local + 10 * DAY } });
+    expect(c.status).toBe('up-to-date');
+    expect(c.remotes.find((r) => r.listing.source === 'patreon')!.seenAt).toBe(local + 10 * DAY);
+  });
+
+  it('shows a page again once its mark is undone, one page or all of them', () => {
+    const key = linkKey('https://patreon.test/thornwood');
+    for (const after of [{ [linkKey('https://wicked.cc.test/other')]: 1 }, {}, undefined]) {
+      const c = finished();
+      refreshCreatorStatus(c, { [key]: local + 10 * DAY }, undefined);
+      expect(c.status).toBe('up-to-date');
+      // History's Undo removes that page's mark; the row's "Undo mark as seen" removes them all.
+      refreshCreatorStatus(c, after, undefined);
+      expect(c.status).toBe('update-available');
+      expect(c.remotes.every((r) => r.seenAt === undefined)).toBe(true);
+    }
+  });
+
+  it('keeps a creator-wide mark made meanwhile', () => {
+    const c = finished();
+    catchUpCreator(c, { ...none, dismissedAt: local + 10 * DAY });
+    expect(c).toMatchObject({ status: 'up-to-date', dismissedAt: local + 10 * DAY });
   });
 });
 

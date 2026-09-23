@@ -1,1 +1,3 @@
-- Mark as seen, turning a site off for a creator, and removing a page now show at once while a check is running. Before, the row stayed as it was until the check finished, and a page removed during a check came back when it ended.
+- Mark as seen, turning a site off for a creator, and removing a page now show immediately while a check is running (before, the row stayed as it was until the check finished)
+- Changes made while a check is running now persist for creators the check hasn't reached yet. A removed page no longer comes back when the check ends, its Undo works even once the check has moved past that creator, and a page marked as seen stays hidden.
+- A site turned off while a check is running is no longer contacted for the rest of that check.

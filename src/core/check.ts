@@ -10,6 +10,7 @@ import type {
   SourceId,
   UpdateSite,
 } from '../shared/types.js';
+import { applyMutedSources } from '../shared/muted.js';
 import { UPDATE_SITES } from '../shared/types.js';
 import { creatorStatus, isNewer } from './compare.js';
 import { type CreatorGroup, groupByCreator, matchName, normalizeName } from './creators.js';
@@ -50,6 +51,11 @@ export interface CheckOptions {
   discoveryCache?: DiscoveryCache;
   /** Sites not to contact. Their pages are only noted on the creator (see CreatorResult.mutedSources). */
   mutedSources?: UpdateSite[];
+  /**
+   * Asked again just before each page is fetched, so a site turned off while the check runs (for
+   * everyone or for this creator) is never contacted from then on, not only from the next check.
+   */
+  isMuted?: (creatorKey: string, site: SourceId) => boolean;
   onProgress?: (progress: CheckProgress) => void;
   /** Called as each creator finishes, for incremental UI updates. */
   onCreator?: (creator: CreatorResult) => void;
@@ -106,6 +112,11 @@ export async function runCheck(opts: CheckOptions): Promise<CheckOutput> {
       mutedFound: new Set<SourceId>(),
     };
   });
+  const mutedNow = (plan: (typeof plans)[number], site: SourceId): boolean => {
+    if (!opts.isMuted?.(plan.group.key, site)) return false;
+    plan.mutedFound.add(site);
+    return true;
+  };
   const adder = (plan: (typeof plans)[number]): ((listing: Listing) => void) => listingAdder(plan.listings, plan.prefs, plan.muted, plan.mutedFound);
   for (const plan of plans) {
     const add = adder(plan);
@@ -122,7 +133,8 @@ export async function runCheck(opts: CheckOptions): Promise<CheckOutput> {
     const key = plan.group.key;
     const cached = discoveryCache[key];
     // With wicked.cc off it isn't searched, but pages found earlier still show that it has this creator.
-    const offline = plan.muted.has('wickedcc');
+    // Only asked here: a page found in the cache is noted as not checked when it comes up below.
+    const offline = plan.muted.has('wickedcc') || Boolean(opts.isMuted?.(key, 'wickedcc'));
     let urls = cached && (offline || now() - cached.at < DISCOVERY_TTL_MS) ? cached.urls : offline ? [] : undefined;
     if (!urls) {
       try {
@@ -148,6 +160,10 @@ export async function runCheck(opts: CheckOptions): Promise<CheckOutput> {
     for (let i = 0; i < plan.listings.length; i++) {
       const listing = plan.listings[i]!;
       throwIfCancelled(opts.signal);
+      if (mutedNow(plan, listing.source)) {
+        progress('check', ++checked, totalListings(), `${plan.group.name}: ${listing.source}`);
+        continue;
+      }
       const { info, findings } = await checkListing(listing, opts.fetcher, now);
       if (findings?.expandTo?.length) {
         // An index page: check the packs it lists instead of the index itself.
@@ -204,12 +220,51 @@ export function toCreatorResult(group: CreatorGroup, found: RemoteInfo[], dismis
   };
 }
 
-/** Copies the per-page "seen" dates onto the pages they belong to. */
+/** What the user has chosen for one creator, as it stands now. */
+export interface CreatorChoices {
+  rejected: readonly string[];
+  /** Sites turned off for every creator. */
+  mutedSources: readonly UpdateSite[];
+  /** Sites turned off for this creator only. */
+  creatorMuted: readonly UpdateSite[];
+  seen?: Record<string, number>;
+  dismissedAt?: number;
+}
+
+/**
+ * Brings a creator the running check has just finished up to date with what the user chose while it
+ * ran: the check planned the creator with the choices from when it started. Returns the pages taken
+ * out as removed, so an Undo still waiting in a toast can put them back.
+ */
+export function catchUpCreator(creator: CreatorResult, choices: CreatorChoices): RemoteInfo[] {
+  const rejected = new Set(choices.rejected.map(linkKey));
+  const isRejected = (r: RemoteInfo): boolean => rejected.has(linkKey(r.listing.url));
+  const removed = creator.remotes.filter(isRejected);
+  creator.remotes = creator.remotes.filter((r) => !isRejected(r));
+  applyMutedSources({ creators: [creator] }, choices.mutedSources, { [creator.key]: choices.creatorMuted });
+  refreshCreatorStatus(creator, choices.seen, choices.dismissedAt);
+  return removed;
+}
+
+/** Re-derives a creator's status from its pages and the current "seen" marks, without a new check. */
+export function refreshCreatorStatus(creator: CreatorResult, seen: Record<string, number> | undefined, dismissedAt: number | undefined): void {
+  // Marking one page as seen changes only that page, so re-apply them before comparing.
+  creator.remotes = markSeenPages(creator.remotes, seen);
+  const { status, remoteUpdatedAt, behindBy } = creatorStatus(creator.localUpdatedAt, creator.remotes, dismissedAt);
+  Object.assign(creator, { status, remoteUpdatedAt, behindBy, dismissedAt });
+}
+
+/**
+ * Copies the per-page "seen" dates onto the pages they belong to, and takes them off pages whose mark
+ * is gone: an undone mark left in place kept the page hidden until the next check.
+ */
 export function markSeenPages(remotes: RemoteInfo[], seen: Record<string, number> | undefined): RemoteInfo[] {
-  if (!seen || !Object.keys(seen).length) return remotes;
   return remotes.map((r) => {
-    const at = seen[linkKey(r.listing.url)];
-    return at === undefined ? r : { ...r, seenAt: at };
+    const at = seen?.[linkKey(r.listing.url)];
+    if (at === r.seenAt) return r;
+    if (at !== undefined) return { ...r, seenAt: at };
+    const { seenAt: _undone, ...page } = r;
+    return page;
   });
 }
 

@@ -1,0 +1,1 @@
+- Undoing "Mark as seen" for one page, from History or with "Undo mark as seen", shows that update again straight away (before, it would stay hidden until the next check)

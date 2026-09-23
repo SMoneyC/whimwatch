@@ -18,8 +18,8 @@ import {
 } from 'electron';
 import { isNewerRelease, latestRelease } from '../core/app-update.js';
 import { dirSize, expiredBackups, hasLiveBackup, listDirNames, orphanBackupDirs, removeDir } from '../core/backups.js';
-import { CORE_KEY, coreResult, markSeenPages, runCheck, unrecognizedFiles } from '../core/check.js';
-import { creatorStatus, isNewer, outdatedRemotes, seenMark } from '../core/compare.js';
+import { catchUpCreator, CORE_KEY, coreResult, refreshCreatorStatus, runCheck, unrecognizedFiles } from '../core/check.js';
+import { isNewer, outdatedRemotes, seenMark } from '../core/compare.js';
 import { groupByCreator } from '../core/creators.js';
 import { datePacks } from '../core/ownership.js';
 import { BUNDLED_OVERRIDES, loadOverrides, type Overrides } from '../core/overrides.js';
@@ -323,6 +323,15 @@ export class AppController {
   async startCheck(): Promise<void> {
     if (this.running || !this.state.dirs.length) return;
     this.running = true;
+    // Link choices as they stand now, before anything is awaited: changes made while the check runs
+    // are applied by catchUp as each creator finishes, which keeps a page removed meanwhile at hand
+    // for its Undo. Planned from the live choices, such a page was never fetched to put back.
+    //
+    // A choice, not an oversight: that page is still loaded once, although the user said it isn't
+    // this creator's. It's a site the check is contacting anyway, and skipping it would make the Undo
+    // do nothing until the next check. The reverse is left as it is: a page removed before the check
+    // and put back while it runs isn't fetched, so it shows again from the next check.
+    const linkPrefs = structuredClone(this.state.linkPrefs);
     this.progress = { phase: 'scan', done: 0, total: 0, message: 'Starting' };
     const abort = (this.checkAbort = new AbortController());
     this.checkMessage = undefined;
@@ -338,15 +347,17 @@ export class AppController {
         fetcher,
         overrides: this.overrides,
         scanCache: this.scanCache,
-        linkPrefs: this.state.linkPrefs,
+        linkPrefs,
         dismissed: this.state.dismissed,
         discoveryCache: this.state.discovery,
         mutedSources: this.state.settings.mutedSources,
+        isMuted: (key, site) => [...this.state.settings.mutedSources, ...(this.state.linkPrefs[key]?.mutedSources ?? [])].some((s) => s === site),
         onProgress: (progress) => {
           this.progress = progress;
           this.emit({ type: 'progress', progress });
         },
         onCreator: (creator) => {
+          this.catchUp(creator);
           this.live.set(creator.key, creator);
           this.emit({ type: 'creator', creator });
         },
@@ -653,9 +664,31 @@ export class AppController {
     this.refreshStatuses();
   }
 
+  /** Applies the choices made since the check started to a creator it has just finished. */
+  private catchUp(creator: CreatorResult): void {
+    const prefs = this.state.linkPrefs[creator.key];
+    const removed = catchUpCreator(creator, {
+      rejected: prefs?.rejected ?? [],
+      mutedSources: this.state.settings.mutedSources,
+      creatorMuted: prefs?.mutedSources ?? [],
+      seen: prefs?.seen,
+      dismissedAt: this.state.dismissed[creator.key],
+    });
+    // A page removed before this creator finished, whose Undo is still on offer: let it come back here too.
+    const undo = this.lastRejected;
+    const mine = undo?.key === creator.key ? removed.filter((r) => linkKey(r.listing.url) === linkKey(undo.url)) : [];
+    if (undo && mine.length) undo.removed.push([creator, mine]);
+  }
+
   /** The creator as the list shows it: this check's copy while it runs, otherwise the saved one. */
   private shownCreator(key: string): CreatorResult | undefined {
     return this.live.get(key) ?? this.state.lastResult?.creators.find((c) => c.key === key);
+  }
+
+  /** Every creator as the list shows it, including ones the running check found for the first time. */
+  private shownCreators(): CreatorResult[] {
+    const keys = new Set([...(this.state.lastResult?.creators ?? []).map((c) => c.key), ...this.live.keys()]);
+    return [...keys].flatMap((k) => this.shownCreator(k) ?? []);
   }
 
   /** Every copy of a creator a change must reach: the saved one and, during a check, the live one. */
@@ -785,7 +818,10 @@ export class AppController {
   async dismissAll(): Promise<AppSnapshot> {
     const result = this.state.lastResult;
     const marks: SeenMark[] = [];
-    for (const c of result?.creators ?? []) {
+    // The rows as shown: during a check (the launch check can start under the open confirmation),
+    // a creator it has finished may be behind where the saved result wasn't, or by a newer date.
+    // WickedWhims stays on the saved result, the only one the check has for it until it ends.
+    for (const c of this.shownCreators()) {
       // Creator-wide is enough here: remoteUpdatedAt is the newest page that's behind, so every
       // other page behind it is covered too.
       if (c.status === 'update-available' && c.remoteUpdatedAt !== undefined) marks.push({ key: c.key, at: c.remoteUpdatedAt });
@@ -848,15 +884,6 @@ export class AppController {
     for (const [creator, remotes] of stash.removed) creator.remotes.push(...remotes);
     this.lastRejected = undefined;
     this.refreshStatuses();
-    return this.commit();
-  }
-
-  /** Forgets added and removed links (not the sites turned off for the creator). */
-  async resetLinks(key: unknown): Promise<AppSnapshot> {
-    const k = str(key);
-    const mutedSources = this.state.linkPrefs[k]?.mutedSources;
-    if (mutedSources) this.state.linkPrefs[k] = { rejected: [], manual: [], mutedSources };
-    else delete this.state.linkPrefs[k];
     return this.commit();
   }
 
@@ -937,11 +964,7 @@ export class AppController {
   /** Re-derives statuses after dismissals or link removals without a new check. */
   private refreshStatuses(): void {
     for (const creator of this.allCreators()) {
-      const dismissedAt = this.state.dismissed[creator.key];
-      // Marking one page as seen changes only that page, so re-apply them before comparing.
-      creator.remotes = markSeenPages(creator.remotes, this.state.linkPrefs[creator.key]?.seen);
-      const { status, remoteUpdatedAt, behindBy } = creatorStatus(creator.localUpdatedAt, creator.remotes, dismissedAt);
-      Object.assign(creator, { status, remoteUpdatedAt, behindBy, dismissedAt });
+      refreshCreatorStatus(creator, this.state.linkPrefs[creator.key]?.seen, this.state.dismissed[creator.key]);
     }
     const core = this.state.lastResult?.core;
     if (core?.installed && core.releasedAt !== undefined) {
