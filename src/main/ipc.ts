@@ -29,7 +29,6 @@ export function registerIpc(controller: AppController, updater: Updater, isTrust
     addLink: (key, url) => controller.addLink(key, url),
     rejectLink: (key, url) => controller.rejectLink(key, url),
     undoRejectLink: (key, url) => controller.undoRejectLink(key, url),
-    resetLinks: (key) => controller.resetLinks(key),
     setCreatorSite: (key, site, on) => controller.setCreatorSite(key, site, on),
     openExternal: (url) => controller.openExternal(url),
     showLinkMenu: (url) => controller.showLinkMenu(url),

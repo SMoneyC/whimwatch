@@ -209,7 +209,6 @@ export interface WhimWatchApi {
   rejectLink(key: string, url: string): Promise<AppSnapshot>;
   /** Puts back the link removed by the last rejectLink (the undo in its toast). */
   undoRejectLink(key: string, url: string): Promise<AppSnapshot>;
-  resetLinks(key: string): Promise<AppSnapshot>;
   /** Turns one site off (or back on) for one creator. */
   setCreatorSite(key: string, site: UpdateSite, on: boolean): Promise<AppSnapshot>;
   openExternal(url: string): Promise<void>;
@@ -283,7 +282,6 @@ export const API_METHODS = [
   'addLink',
   'rejectLink',
   'undoRejectLink',
-  'resetLinks',
   'setCreatorSite',
   'openExternal',
   'showLinkMenu',
