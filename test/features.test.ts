@@ -109,7 +109,18 @@ describe('already up to date', () => {
     expect(plan).toMatchObject({ upToDate: false, onlyAdds: true });
 
     // Nothing of theirs in the download at all: not this case, whatever it is.
-    const unrelated = planInstall({ ...plan, extractedDir: x, extractedFiles: ['WW_Moonberry_Juniper_Petal.package'], installedFiles: [local(join(mods, 'WW_Moonberry_Animations.package'), mods)], modsRoots: [mods], downloads: [], id: 'q' });
+    const unrelated = planInstall({
+      id: 'q',
+      creatorKey: 'moonberry',
+      name: 'Moonberry',
+      downloadUrl: '',
+      source: 'loverslab',
+      downloads: ['Juniper Petal.zip'],
+      extractedDir: x,
+      extractedFiles: ['WW_Moonberry_Juniper_Petal.package'],
+      installedFiles: [local(join(mods, 'WW_Moonberry_Animations.package'), mods)],
+      modsRoots: [mods],
+    });
     await markUnchanged(unrelated);
     expect(unrelated.onlyAdds).toBe(false);
   });

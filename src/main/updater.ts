@@ -130,11 +130,12 @@ export class Updater {
                 : `Your files match ${label}, but another source looks newer. Open the creator's pages to see what's new.`;
             }
             if (plan.onlyAdds) {
-              // Not installed on the user's behalf: it's usually a new pack, not an update to theirs.
+              // Not installed on the user's behalf, since it's usually a new pack rather than an update
+              // to theirs, and not marked as seen either: that would leave the row with no button and
+              // the new files with no way back to them. The row stays, and its Update window asks.
               await this.discardPlans(key);
-              await this.controller.markSeen(key, plan.downloadUrl, { automatic: true });
               const added = plan.files.filter((f) => f.kind === 'add').length;
-              return `Your files match ${SOURCE_LABEL[plan.source]}. It also has ${added === 1 ? 'a file' : `${added} files`} you don't have, probably a new pack: open ${plan.name} to get ${added === 1 ? 'it' : 'them'}.`;
+              return `Your files match ${SOURCE_LABEL[plan.source]}. It also has ${added === 1 ? 'a file' : `${added} files`} you don't have, probably a new pack. Open its Update window to install ${added === 1 ? 'it' : 'them'} or mark it as seen.`;
             }
             if (!plan.files.length) throw new Error("The download doesn't contain any .package or .ts4script files.");
             if (opts.skipIfWarnings && plan.warnings.length) throw new Error(`Needs a look: ${plan.warnings[0]}`);

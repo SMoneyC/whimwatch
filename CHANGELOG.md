@@ -13,7 +13,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 - A creator with no download pages no longer shows under "Need a look" once every site is turned off for them.
 - Signing in to LoversLab or Patreon while a check is running no longer stops the check with "Check failed: Cancelled". Signing out or clearing browsing data mid-check now only affects the page being loaded at that moment.
-- A page that gains a new pack while your files on it stay the same (a creator's new Simlish edition, say) is no longer installed as an update. Update all leaves it alone and marks it as seen, and the Update window says it only adds new files, so you can get them or mark it as seen.
+- When a download only adds files you don't have and your own files in it are unchanged (a creator's new Simlish edition, say), WhimWatch no longer installs it as an update. Update all leaves it alone, and the Update window says it's probably a new pack and lets you install the new files or mark it as seen.
 
 ## [0.2.3] - 2026-09-23
 
