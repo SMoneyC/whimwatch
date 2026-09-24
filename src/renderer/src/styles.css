@@ -1633,6 +1633,12 @@ button.chip {
   font-weight: 600;
 }
 
+/* "You didn't install this last time": the name gives way first. */
+.file-line-note {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .file-section {
   padding: var(--s3) 0 0;
 }

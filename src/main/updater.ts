@@ -7,7 +7,7 @@ import { runBatch, StopBatchError } from '../core/batch.js';
 import { CORE_KEY } from '../core/check.js';
 import { CancelledError, throwIfCancelled } from '../core/fetcher.js';
 import { applyInstall, markUnchanged, planInstall, undoInstall } from '../core/installer.js';
-import { updateExclusions } from '../core/pack-files.js';
+import { startUnticked, updateExclusions } from '../core/pack-files.js';
 import { isGameRunning } from '../core/process.js';
 import { chooseRemote } from '../core/source-choice.js';
 import type { AppSnapshot, BatchState, StorageInfo, UpdateChoice, UpdatePlan, UpdateStage } from '../shared/api.js';
@@ -142,10 +142,14 @@ export class Updater {
             }
             if (!plan.files.length) throw new Error("The download doesn't contain any .package or .ts4script files.");
             if (opts.skipIfWarnings && plan.warnings.length) throw new Error(`Needs a look: ${plan.warnings[0]}`);
-            await this.apply(plan.id, { remove: [], skip: [] }, { batchId, automatic: opts.automatic });
-            const changed = plan.files.filter((f) => !f.unchanged);
+            // Nobody is there to tick them: files left out before stay out.
+            await this.apply(plan.id, { remove: [], skip: plan.startUnticked ?? [] }, { batchId, automatic: opts.automatic });
+            const changed = plan.files.filter((f) => !f.unchanged && !plan.startUnticked?.includes(f.target));
             return {
-              message: `Installed ${changed.length} file${changed.length === 1 ? '' : 's'} from ${SOURCE_LABEL[plan.source]}${plan.warnings.length ? ` (${plan.warnings[0]})` : ''}`,
+              // Left out without anyone asking, so said out loud: the file is still one tick away.
+              message: `Installed ${changed.length} file${changed.length === 1 ? '' : 's'} from ${SOURCE_LABEL[plan.source]}${
+                plan.startUnticked?.length ? ` · left out ${plan.startUnticked.length} you skipped before` : ''
+              }${plan.warnings.length ? ` (${plan.warnings[0]})` : ''}`,
               replaced: changed.filter((f) => f.kind === 'replace').length,
               added: changed.filter((f) => f.kind === 'add').length,
             };
@@ -313,6 +317,10 @@ export class Updater {
       });
       plan.skipped.push(...notMods);
       await markUnchanged(plan, abort.signal);
+      // Files left out before start unticked; not for Get it, where the one file was asked for.
+      const skipped = opts.onlyFile ? [] : (this.controller.currentState.linkPrefs[String(key)]?.skippedFiles ?? []);
+      const unticked = startUnticked(plan.files, skipped, this.controller.installedFiles());
+      if (unticked.length) plan.startUnticked = unticked;
       if (await isGameRunning()) plan.warnings.unshift('The Sims 4 is running. Close it before installing.');
       this.plans.set(plan.id, { plan, workDir });
       progress('done', plan.upToDate ? `Already up to date with ${label}` : `Ready to install from ${label}`);
@@ -341,6 +349,14 @@ export class Updater {
       });
       this.plans.delete(plan.id);
       await rm(workDir, { recursive: true, force: true });
+      // What they left unticked is remembered, so it starts unticked next time; what they
+      // installed is forgotten, being theirs now.
+      const added = plan.files.filter((f) => f.kind === 'add' && !f.unchanged);
+      this.controller.rememberSkipped(
+        plan.creatorKey,
+        added.filter((f) => choice.skip.includes(f.target)).map((f) => basename(f.target)),
+        added.filter((f) => !choice.skip.includes(f.target)).map((f) => basename(f.target)),
+      );
       const newPack = this.isNewPackPage(plan);
       progress('done', `${newPack ? 'Added' : 'Updated'} ${plan.name}`);
       return await this.controller.recordInstall({

@@ -40,6 +40,11 @@ export interface CreatorLinkPrefs {
   mutedSources?: UpdateSite[];
   /** Files on their pages the user said no thanks to (RemoteInfo.newFiles), by lower-case name. */
   ignoredFiles?: string[];
+  /**
+   * Files on their pages the user chose not to install (a no-sound edition, say), by lower-case
+   * name. They start unticked when an update brings them again; see pack-files.ts.
+   */
+  skippedFiles?: string[];
 }
 
 export type DiscoveryCache = Record<string, { at: number; urls: string[] }>;

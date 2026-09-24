@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join, relative, sep } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   app,
@@ -22,7 +22,7 @@ import { catchUpCreator, CORE_KEY, coreResult, refreshCreatorStatus, runCheck, u
 import { isNewer, outdatedRemotes, seenMark } from '../core/compare.js';
 import { groupByCreator } from '../core/creators.js';
 import { datePacks } from '../core/ownership.js';
-import { dropInstalledFiles } from '../core/pack-files.js';
+import { dropInstalledFiles, updateSkipped } from '../core/pack-files.js';
 import { BUNDLED_OVERRIDES, loadOverrides, type Overrides } from '../core/overrides.js';
 import { filesFromCache, rescanPaths, type ScanCache, scanDirs } from '../core/scanner.js';
 import { classifyUrl, linkKey, linkProblem, normalizeUserUrl } from '../core/sources/urls.js';
@@ -703,10 +703,25 @@ export class AppController {
       seen: prefs?.seen,
       dismissedAt: this.state.dismissed[creator.key],
     });
+    const variants = creator.remotes.flatMap((r) => r.variants ?? []);
+    if (variants.length) this.rememberSkipped(creator.key, variants, []);
     // A page removed before this creator finished, whose Undo is still on offer: let it come back here too.
     const undo = this.lastRejected;
     const mine = undo?.key === creator.key ? removed.filter((r) => linkKey(r.listing.url) === linkKey(undo.url)) : [];
     if (undo && mine.length) undo.removed.push([creator, mine]);
+  }
+
+  /**
+   * Remembers files the user left out on a creator's pages (unticked in an update, or seen as
+   * variants of the pack they have) and forgets ones they've since installed; see pack-files.ts.
+   * Saved with the next commit.
+   */
+  rememberSkipped(key: string, left: readonly string[], installed: readonly string[]): void {
+    const prefs = this.prefs(key);
+    const have = [...installed, ...this.installedFiles().map((f) => basename(f.path))];
+    const next = updateSkipped(prefs.skippedFiles, left, have);
+    if (next) prefs.skippedFiles = next;
+    else delete prefs.skippedFiles;
   }
 
   /** The creator as the list shows it: this check's copy while it runs, otherwise the saved one. */

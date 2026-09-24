@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { datePageByFiles, dropInstalledFiles, updateExclusions, versionless } from '../src/core/pack-files.js';
+import { datePageByFiles, dropInstalledFiles, startUnticked, updateExclusions, updateSkipped, versionless, wasSkipped, withoutVersion } from '../src/core/pack-files.js';
 import type { AppSnapshot } from '../src/shared/api.js';
 import type { CreatorResult, LocalFile, RemoteInfo } from '../src/shared/types.js';
 import { newFilesFor } from '../src/renderer/src/eligibility.js';
@@ -26,6 +26,8 @@ describe("dating a LoversLab page by its files", () => {
       ...page,
       updatedAt: at('2026-07-30T13:30:28Z'),
       newFiles: [{ name: 'WW_Moonberry_Juniper_Petal.package', updatedAt: at('2026-09-11T11:55:39Z') }],
+      // Their pack is current, so the no-sound edition of that upload is one they left out.
+      variants: ['WW_Moonberry_Animations_NoSound.package'],
     });
   });
 
@@ -79,5 +81,75 @@ describe("dating a LoversLab page by its files", () => {
     expect(newFilesFor(creator, snapshot(true)).map((f) => f.name)).toEqual(['WW_Moonberry_Juniper_Petal.package']);
     expect(newFilesFor(creator, snapshot(true, ['ww_moonberry_juniper_petal.package']))).toEqual([]);
     expect(newFilesFor(creator, snapshot(false))).toEqual([]);
+  });
+});
+
+describe('remembering files the user left out', () => {
+  it("notes a pack's variants only while their pack is current, never with an update pending", () => {
+    // Current: their copy (Sep 14) is newer than their file on the list (Jul 30).
+    expect(datePageByFiles(page, listed, [local('WW_Moonberry_Animations.package')]).variants).toEqual(['WW_Moonberry_Animations_NoSound.package']);
+    // Update pending: the list is the new upload, where a file they lack may be a companion it needs.
+    const reuploaded = listed.map((f) => ({ ...f, updatedAt: at('2026-09-20T10:00:00Z') }));
+    expect(datePageByFiles(page, reuploaded, [local('WW_Moonberry_Animations.package')]).variants).toBeUndefined();
+  });
+
+  it('knows a left-out file again by its name, or its name under another version marker', () => {
+    const skipped = ['ww_moonberry_animations_nosound.package', 'ww_moonberry_thornwood_v1.2.package', 'ww_moonberry_velvet-1.5.package'];
+    expect(wasSkipped('WW_Moonberry_Animations_NoSound.package', skipped)).toBe(true);
+    expect(wasSkipped('WW_Moonberry_Animations_NoSound_v2.package', skipped)).toBe(true);
+    expect(wasSkipped('WW_Moonberry_Thornwood_v2.package', skipped)).toBe(true);
+    expect(wasSkipped('WW_Moonberry_Velvet-2.0.package', skipped)).toBe(true);
+  });
+
+  it("never takes a companion file for one they left out: a wrong match would leave it out of the update", () => {
+    // Another kind of file, even under the same name.
+    expect(wasSkipped('WW_Moonberry_Animations.ts4script', ['ww_moonberry_animations.zip'])).toBe(false);
+    expect(wasSkipped('WW_Moonberry_Animations.ts4script', ['ww_moonberry_animations_v1.package'])).toBe(false);
+    // Numbered parts are different files, not versions of one.
+    expect(wasSkipped('WW_Moonberry_Pose_02.package', ['ww_moonberry_pose_01.package'])).toBe(false);
+    expect(wasSkipped('02.package', ['01.package'])).toBe(false);
+    // "v" inside a word is not a version marker.
+    expect(withoutVersion('WW_Velvet.package')).toBe('ww_velvet.package');
+    // A marker from the middle of a name leaves one separator, not two.
+    expect(withoutVersion('WW_Moonberry_v2_NoSound.package')).toBe(withoutVersion('WW_Moonberry_NoSound.package'));
+  });
+
+  it("never takes an old version of their own file for one they skipped, so their update isn't left out", () => {
+    // The page keeps the old version beside the one they have, which is current.
+    const kept = [
+      { href: 'r=1', name: 'WW_Moonberry_Animations_v0.package', updatedAt: at('2026-06-01T10:00:00Z') },
+      { href: 'r=2', name: 'WW_Moonberry_Animations_v1.package', updatedAt: at('2026-07-30T13:30:28Z') },
+      { href: 'r=3', name: 'WW_Moonberry_Animations_NoSound.package', updatedAt: at('2026-07-30T13:31:00Z') },
+    ];
+    const theirs = [local('WW_Moonberry_Animations_v1.package')];
+    expect(datePageByFiles(page, kept, theirs).variants).toEqual(['WW_Moonberry_Animations_NoSound.package']);
+
+    // Their update arrives as v2. Even with v0 already on a saved skipped list, v2 starts ticked;
+    // the no-sound edition, whose name only shares their pack's start, still starts unticked.
+    const files = [
+      { target: '/mods/WW_Moonberry_Animations_v2.package', kind: 'add' },
+      { target: '/mods/WW_Moonberry_Animations_NoSound.package', kind: 'add' },
+    ];
+    const skipped = ['ww_moonberry_animations_v0.package', 'ww_moonberry_animations_nosound.package'];
+    expect(startUnticked(files, skipped, theirs)).toEqual(['/mods/WW_Moonberry_Animations_NoSound.package']);
+    expect(startUnticked(files, [], theirs)).toEqual([]);
+  });
+
+  it('adds what was left out and forgets what has been installed since', () => {
+    const after = updateSkipped(undefined, ['WW_Moonberry_Animations_NoSound.package', 'WW_Moonberry_Thornwood.package'], []);
+    expect(after).toEqual(['ww_moonberry_animations_nosound.package', 'ww_moonberry_thornwood.package']);
+    // They installed the no-sound edition's next version: it isn't left out any more.
+    expect(updateSkipped(after, [], ['WW_Moonberry_Animations_NoSound_v2.package'])).toEqual(['ww_moonberry_thornwood.package']);
+    expect(updateSkipped(['ww_moonberry_thornwood.package'], [], ['WW_Moonberry_Thornwood.package'])).toBeUndefined();
+    // Installed in the same go as it was left out (two copies on the page): theirs, not skipped.
+    expect(updateSkipped(undefined, ['WW_Moonberry_Velvet.package'], ['ww_moonberry_velvet.package'])).toBeUndefined();
+  });
+
+  it('only ever remembers mod files', () => {
+    // An install left a zip and a preview unticked: neither is worth remembering.
+    expect(updateSkipped(undefined, ['WW_Moonberry_Extras.zip', 'preview.jpg', 'WW_Moonberry_NoSound.package'], [])).toEqual(['ww_moonberry_nosound.package']);
+    // Nor does a check note them as variants.
+    const withZip = [...listed, { href: 'r=4', name: 'WW_Moonberry_Animations_All.zip', updatedAt: at('2026-07-30T13:30:28Z') }];
+    expect(datePageByFiles(page, withZip, [local('WW_Moonberry_Animations.package')]).variants).toEqual(['WW_Moonberry_Animations_NoSound.package']);
   });
 });

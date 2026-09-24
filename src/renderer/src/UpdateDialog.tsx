@@ -67,6 +67,8 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
       (p) => {
         if (cancelled) return;
         setPlan(p);
+        // Files they left out before start unticked; everything else starts ticked.
+        setSkip(p.startUnticked ?? []);
         setGameOpen(p.warnings.some(isGameWarning));
       },
       (err: Error) => !cancelled && setFailed(err.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')),
@@ -405,7 +407,14 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
 
           <div className="file-changes">
             {[...replaceFiles, ...addFiles].map((f) => (
-              <FileLine key={f.target} kind={f.kind} path={f.target} checked={!skip.includes(f.target)} onToggle={() => setSkip(toggle(skip, f.target))} />
+              <FileLine
+                key={f.target}
+                kind={f.kind}
+                path={f.target}
+                checked={!skip.includes(f.target)}
+                onToggle={() => setSkip(toggle(skip, f.target))}
+                note={plan?.startUnticked?.includes(f.target) ? "You chose not to install this last time" : undefined}
+              />
             ))}
             {/* Not for a pack they're getting: nothing installed can be an older version of a pack
                 they never had, so every file the creator made would be listed for removal. */}
@@ -465,7 +474,7 @@ const KIND = {
   remove: { icon: Minus, label: 'Remove', off: 'Keep' },
 } as const;
 
-function FileLine({ kind, path, checked, onToggle }: { kind: keyof typeof KIND; path: string; checked: boolean; onToggle: () => void }) {
+function FileLine({ kind, path, checked, onToggle, note }: { kind: keyof typeof KIND; path: string; checked: boolean; onToggle: () => void; note?: string }) {
   const { icon: KindIcon, label, off } = KIND[kind];
   return (
     <label className={`file-line kind-${kind} ${checked ? '' : 'off'}`}>
@@ -476,6 +485,7 @@ function FileLine({ kind, path, checked, onToggle }: { kind: keyof typeof KIND; 
       <span className="mono file-line-name" title={path}>
         {fileName(path)}
       </span>
+      {note && <span className="faint small file-line-note">{note}</span>}
       <span className="kind-label">{checked ? label : off}</span>
     </label>
   );

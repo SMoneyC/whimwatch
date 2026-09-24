@@ -145,6 +145,12 @@ export interface UpdatePlan {
    * user's call: Update all leaves it alone and the Update window asks.
    */
   onlyAdds?: boolean;
+  /**
+   * Added files (targets) the user left out before, such as a no-sound edition re-uploaded with the
+   * update: they start unticked, in the Update window and in Update all. A file with no such history
+   * starts ticked, since it may be a companion the update needs.
+   */
+  startUnticked?: string[];
 }
 
 /** What the user picked in the update preview. */

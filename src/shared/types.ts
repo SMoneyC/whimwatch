@@ -116,6 +116,12 @@ export interface RemoteInfo {
    * page's date without touching yours; see core/pack-files.ts.
    */
   newFiles?: { name: string; updatedAt?: number }[];
+  /**
+   * LoversLab: files posted with (or before) the user's current file that they don't have: variants
+   * they left out, such as a no-sound edition. Only set while their pack on the page is current, so
+   * a companion file an update needs is never among them. Remembered as skipped (see pack-files.ts).
+   */
+  variants?: string[];
   error?: string;
 }
 
