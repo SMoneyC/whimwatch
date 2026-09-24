@@ -1,1 +1,0 @@
-- Files you leave unticked in an update start unticked the next time an update brings them, with a note saying so. Update all leaves them out and says how many it left out. New files an update adds still start ticked.

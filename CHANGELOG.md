@@ -3,6 +3,22 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.5] - 2026-09-24
+
+### Added
+
+- Pages you removed from a creator, with "Not this creator's page" or "Not interested" in a pack, are listed under "N pages hidden" in the creator's details, and each can be shown again. Before, the temporary "Undo" in the pop-up was the only way to reverse these.
+
+### Changed
+
+- LoversLab pages are dated by their files, not by the page. Editing a page, or adding a new pack to it, no longer makes your pack on it look out of date. A newer version of your own file under a new name still counts as an update. For such pages WhimWatch reads the page's list of files on each check, one extra request.
+- A new pack added to a LoversLab page you follow is shown under "New on a page of theirs". "Get it" downloads only that file, "Not interested" hides it ("Show it again", in the creator's details, brings it back), and updating your pack from that page leaves it out.
+- Files you leave unticked in an update start unticked the next time an update brings them, with a note saying so. "Update all" leaves them out and says how many it left out. New files an update adds still start ticked.
+
+### Fixed
+
+- Page titles written in styled Unicode letters (a name like "𝑴𝒐𝒐𝒏𝒃𝒆𝒓𝒓𝒚") are shown as plain text. Before, depending on your system, they could show as empty boxes, and they could not be searched.
+
 ## [0.2.4] - 2026-09-23
 
 ### Changed

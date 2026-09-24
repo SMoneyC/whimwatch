@@ -1,1 +1,0 @@
-- Page titles written in styled Unicode letters (a name like "𝑴𝒐𝒐𝒏𝒃𝒆𝒓𝒓𝒚") are shown as plain text. Before, they could show as empty boxes, and they could not be searched.
