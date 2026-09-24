@@ -18,11 +18,11 @@ import {
 } from 'electron';
 import { isNewerRelease, latestRelease } from '../core/app-update.js';
 import { dirSize, expiredBackups, hasLiveBackup, listDirNames, orphanBackupDirs, removeDir } from '../core/backups.js';
-import { catchUpCreator, CORE_KEY, coreResult, refreshCreatorStatus, runCheck, unrecognizedFiles } from '../core/check.js';
+import { catchUpCreator, checkAddedPage, CORE_KEY, coreResult, refreshCreatorStatus, runCheck, unrecognizedFiles } from '../core/check.js';
 import { isNewer, outdatedRemotes, seenMark } from '../core/compare.js';
 import { groupByCreator } from '../core/creators.js';
 import { datePacks } from '../core/ownership.js';
-import { removeLink, restoreLink } from '../core/link-prefs.js';
+import { removeLink, restoreLink, unreadLinks } from '../core/link-prefs.js';
 import { dropInstalledFiles, updateSkipped } from '../core/pack-files.js';
 import { BUNDLED_OVERRIDES, loadOverrides, type Overrides } from '../core/overrides.js';
 import { filesFromCache, rescanPaths, type ScanCache, scanDirs } from '../core/scanner.js';
@@ -255,6 +255,13 @@ export class AppController {
       accounts: await this.refreshAccounts(),
       installs: s.installs,
       manualLinks: Object.fromEntries(Object.entries(s.linkPrefs).map(([k, v]) => [k, v.manual])),
+      unreadLinks: Object.fromEntries(
+        (s.lastResult?.creators ?? []).flatMap((c) => {
+          // When the last check started: one already running when a page was added never read it.
+          const unread = unreadLinks(s.linkPrefs[c.key], [...c.remotes, ...(c.mutedRemotes ?? [])], s.lastResult?.startedAt);
+          return unread.length ? [[c.key, unread]] : [];
+        }),
+      ),
       rejectedLinks: Object.fromEntries(Object.entries(s.linkPrefs).map(([k, v]) => [k, v.rejected])),
       creatorMutedSources: Object.fromEntries(Object.entries(s.linkPrefs).flatMap(([k, v]) => (v.mutedSources?.length ? [[k, v.mutedSources]] : []))),
       ignoredFiles: Object.fromEntries(Object.entries(s.linkPrefs).flatMap(([k, v]) => (v.ignoredFiles?.length ? [[k, v.ignoredFiles]] : []))),
@@ -703,6 +710,14 @@ export class AppController {
   /** Applies the choices made since the check started to a creator it has just finished. */
   private catchUp(creator: CreatorResult): void {
     const prefs = this.state.linkPrefs[creator.key];
+    // A page added while the check ran isn't in its plan: carry over what was read of it just after
+    // it was added (checkAddedLink), or the check's result would drop it again until the next one.
+    const saved = this.state.lastResult?.creators.find((c) => c.key === creator.key && c !== creator);
+    for (const url of prefs?.manual ?? []) {
+      const same = (r: RemoteInfo): boolean => linkKey(r.listing.url) === linkKey(url);
+      const read = creator.remotes.some(same) ? undefined : saved?.remotes.find(same);
+      if (read) creator.remotes = [...creator.remotes, read];
+    }
     const removed = catchUpCreator(creator, {
       rejected: prefs?.rejected ?? [],
       mutedSources: this.state.settings.mutedSources,
@@ -901,9 +916,42 @@ export class AppController {
     const same = (u: string): boolean => linkKey(u) === linkKey(link);
     restoreLink(prefs, link);
     if (!prefs.manual.some(same)) prefs.manual.push(link);
+    prefs.addedAt = { ...prefs.addedAt, [linkKey(link)]: Date.now() };
     // Adding a page on a site turned off for this creator means they want it checked again.
-    if (prefs.mutedSources?.includes(site)) return this.setCreatorSite(k, site, true);
-    return this.commit();
+    const snapshot = prefs.mutedSources?.includes(site) ? await this.setCreatorSite(k, site, true) : await this.commit();
+    void this.checkAddedLink(k, link);
+    return snapshot;
+  }
+
+  /**
+   * Reads a page the user just added, on its own, so its creator's row changes now: before, it waited
+   * for the next check, and a creator with no page stayed under "Need a look" with nothing on screen
+   * to say the page was taken. One page (and its file list, as a check reads it), asked for by the
+   * user. Should it fail (not signed in, a challenge), the next check reads it as before.
+   */
+  private async checkAddedLink(key: string, link: string): Promise<void> {
+    const creator = this.shownCreator(key);
+    const source = classifyUrl(link);
+    if (!creator || !source || source === 'wwmod') return;
+    const same = (u: string): boolean => linkKey(u) === linkKey(link);
+    try {
+      const info = await checkAddedPage({ key, name: creator.name, files: creator.files }, { source, url: link, origin: 'manual' }, creator.remotes, {
+        dirs: this.state.dirs,
+        fetcher: this.pool.fetcher(),
+        dismissed: this.state.dismissed,
+        linkPrefs: this.state.linkPrefs,
+        isMuted: (k, site) => [...this.state.settings.mutedSources, ...(this.state.linkPrefs[k]?.mutedSources ?? [])].some((s) => s === site),
+      });
+      // Removed again while it was being read: leave it removed.
+      if (!info || !this.state.linkPrefs[key]?.manual.some(same)) return;
+      for (const c of this.copiesOf(key)) {
+        c.remotes = datePacks({ key, name: c.name, files: c.files }, [...c.remotes.filter((r) => !same(r.listing.url)), info]);
+        this.catchUp(c);
+      }
+      await this.commit();
+    } catch (err) {
+      console.warn('Reading the added page failed; the next check will:', (err as Error).message);
+    }
   }
 
   async rejectLink(key: unknown, url: unknown): Promise<AppSnapshot> {

@@ -19,7 +19,7 @@ import { type CreatorResult, type RemoteInfo, UPDATE_SITES, type UpdateSite } fr
 import { ownedRemotes } from '../../shared/updatable';
 import { AFTER_CHECK, gettableNewPack, ignoredFilesFor, type NewFile, newFilesFor, newPacksFor, rowAction, rowStatus, rowSummary, siteList } from './eligibility';
 import { formatVersion } from '../../shared/version';
-import { formatShortDate, plural, remoteSummary, removedPageLabel, shortTitle, SOURCE_LABEL, timeAgo } from './format';
+import { formatShortDate, plural, remoteSummary, pageLabel, shortTitle, SOURCE_LABEL, timeAgo } from './format';
 import { useToast } from './toast';
 import type { UpdateTarget } from './UpdateDialog';
 import { api, type AppModel } from './useApp';
@@ -177,6 +177,9 @@ function CreatorDetails({
   const packs = newPacksFor(c, snapshot);
   const files = newFilesFor(c, snapshot);
   const ignored = ignoredFilesFor(c, snapshot);
+  // Pages the user added that nothing has read yet: reading one straight away can fail (signed out, a
+  // challenge), and then only the next check will. Shown, so adding a page never looks like nothing.
+  const unread = snapshot.unreadLinks?.[c.key] ?? [];
   // Pages removed with "Not this creator's page" or "Not interested": listed so either can be taken
   // back after its toast is gone. Only their addresses are kept.
   const removed = snapshot.rejectedLinks[c.key] ?? [];
@@ -207,7 +210,7 @@ function CreatorDetails({
           </span>
         )}
       </div>
-      {c.remotes.length === 0 && !muted.length ? (
+      {c.remotes.length === 0 && !muted.length && !unread.length ? (
         <p className="muted small">No download pages found for this creator yet. Add a wicked.cc, LoversLab or Patreon page below.</p>
       ) : (
         pages.length > 0 && (
@@ -217,6 +220,16 @@ function CreatorDetails({
             ))}
           </div>
         )
+      )}
+      {unread.length > 0 && (
+        <ul className="file-list">
+          {unread.map((url) => (
+            <li key={url}>
+              <span className="small grow">{pageLabel(url, hideTitles)}</span>
+              <span className="faint small">Added by you · Not read yet</span>
+            </li>
+          ))}
+        </ul>
       )}
 
       {packs.length > 0 && (
@@ -272,7 +285,7 @@ function CreatorDetails({
           <ul className="file-list">
             {removed.map((url) => (
               <li key={url}>
-                <span className="small grow">{removedPageLabel(url, hideTitles)}</span>
+                <span className="small grow">{pageLabel(url, hideTitles)}</span>
                 <button type="button" className="link-btn accent small" onClick={() => void showPageAgain(url)}>
                   Show again
                 </button>
@@ -589,7 +602,6 @@ function NewFileCard({
 function AddPage({ creator, app, onDone }: { creator: CreatorResult; app: AppModel; onDone: () => void }) {
   const [url, setUrl] = useState('');
   const input = useRef<HTMLInputElement>(null);
-  const pending = (app.snapshot!.manualLinks[creator.key] ?? []).filter((p) => !creator.remotes.some((r) => r.listing.url === p));
   useEffect(() => input.current?.focus(), []);
 
   const submit = async (e: FormEvent): Promise<void> => {
@@ -625,7 +637,6 @@ function AddPage({ creator, app, onDone }: { creator: CreatorResult; app: AppMod
       <Button variant="quiet" size="sm" onClick={onDone}>
         Cancel
       </Button>
-      {pending.length > 0 && <p className="faint small">{pending.length === 1 ? 'Your added page' : `${pending.length} added pages`} will be checked on the next check.</p>}
     </form>
   );
 }

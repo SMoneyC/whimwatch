@@ -119,11 +119,11 @@ export function acceleratorFromKey(
 }
 
 /**
- * A removed page, told apart by its address: only the address is kept, not the page's title. Its
- * site plus the readable end of the address ("wicked.cc · moonberry/juniper-petal"); with page titles
- * hidden, the site alone, since the address names the pack as plainly as a title would.
+ * A page known only by its address (one removed, or added and not read yet), since its title isn't
+ * kept: its site plus the readable end of the address ("wicked.cc · moonberry/juniper-petal"); with
+ * page titles hidden, the site alone, since the address names the pack as plainly as a title would.
  */
-export function removedPageLabel(url: string, hideTitles: boolean): string {
+export function pageLabel(url: string, hideTitles: boolean): string {
   let parsed: URL;
   try {
     parsed = new URL(url);

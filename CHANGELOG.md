@@ -19,6 +19,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Page titles written in styled Unicode letters (a name like "𝑴𝒐𝒐𝒏𝒃𝒆𝒓𝒓𝒚") are shown as plain text. Before, depending on your system, they could show as empty boxes, and they could not be searched.
+- A page you add to a creator is read straight away, so the creator's row updates without waiting for the next check, even while a check is running. Before, a creator with no page stayed under "Need a look" with nothing to show the page had been added. An added page that hasn't been read yet is listed in the creator's details.
 
 ## [0.2.4] - 2026-09-23
 

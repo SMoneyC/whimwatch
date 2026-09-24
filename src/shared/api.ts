@@ -79,6 +79,8 @@ export interface AppSnapshot {
   installs: InstallRecord[];
   /** Creator key → user-added links, for editing. */
   manualLinks: Record<string, string[]>;
+  /** Creator key → pages the user added that nothing has read yet (see core/link-prefs.ts). */
+  unreadLinks: Record<string, string[]>;
   /** Creator key → links the user removed. */
   rejectedLinks: Record<string, string[]>;
   /** Creator key → sites turned off for that creator only (see AppSettings.mutedSources for everyone). */

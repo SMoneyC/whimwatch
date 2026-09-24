@@ -2,7 +2,7 @@ import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { catchUpCreator, CORE_KEY, refreshCreatorStatus, runCheck } from '../src/core/check.js';
+import { catchUpCreator, checkAddedPage, CORE_KEY, refreshCreatorStatus, runCheck } from '../src/core/check.js';
 import { creatorStatus, TOLERANCE_MS } from '../src/core/compare.js';
 import { CancelledError, type Fetcher, type HttpResponse } from '../src/core/fetcher.js';
 import { SNIPPET_TUNING_TYPE } from '../src/core/scanner.js';
@@ -258,6 +258,26 @@ describe('runCheck', () => {
     const styled = pages.LOVERSLAB_FILE.replaceAll('Tester Adult Animations', '\u200B𝑴𝒐𝒐𝒏𝒃𝒆𝒓𝒓𝒚\u200B Adult Animations');
     const { result } = await runCheck({ dirs: [mods], fetcher: new FakeFetcher({ ...ROUTES, [lab]: styled }) });
     expect(result.creators.find((c) => c.key === 'moonberry')!.remotes.find((r) => r.listing.url === lab)?.title).toBe('Moonberry Adult Animations');
+  });
+
+  it('reads a page the user just added on its own, as a check would, but leaves an index to a check', async () => {
+    const lab = 'https://www.loverslab.com/files/file/3528-moonberry-animations/';
+    const routes = {
+      ...ROUTES,
+      [lab]: pages.LOVERSLAB_FILE_SEVERAL.replace('2024-04-10T21:52:40+0000', '2026-09-18T11:16:48+0000'),
+      [`${lab}?do=download`]: pages.LOVERSLAB_CHOOSER_DATED.replace('WW_Moonberry_Animations.package', 'WW_Moonberry.package').replace('2026-07-30T13:30:28Z', '2024-12-01T10:00:00Z'),
+    };
+    const files = [{ path: join(mods, 'WW_Moonberry.package'), root: mods, relPath: 'WW_Moonberry.package', size: 1, mtimeMs: Date.parse('2025-01-01'), kind: 'ww-animation' as const, authors: {} }];
+    const group = { key: 'moonberry', name: 'moonberry', files };
+    const opts = { dirs: [mods], fetcher: new FakeFetcher(routes) };
+
+    const page = await checkAddedPage(group, { source: 'loverslab', url: lab, origin: 'manual' }, [], opts);
+    // Read, and dated by its own files: their pack's file, not the page's later edit.
+    expect(page).toMatchObject({ status: 'ok', listing: { origin: 'manual' }, updatedAt: Date.parse('2024-12-01T10:00:00Z') });
+    expect(page?.newFiles?.map((f) => f.name)).toEqual(['WW_Moonberry_Juniper_Petal.package']);
+
+    // A creator's index lists other pages: expanding it is a check's job.
+    expect(await checkAddedPage(group, { source: 'wickedcc', url: 'https://wicked.cc/animations/tester/', origin: 'manual' }, [], opts)).toBeUndefined();
   });
 
   it('with wicked.cc off, uses pages found earlier without searching it again', async () => {

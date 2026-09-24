@@ -37,6 +37,8 @@ export interface CreatorLinkPrefs {
   manual: string[];
   /** The removed pages (in rejected) that the user had added by hand; see core/link-prefs.ts. */
   rejectedManual?: string[];
+  /** When each page in manual was added, by link key: see unreadLinks in core/link-prefs.ts. */
+  addedAt?: Record<string, number>;
   /** Pages marked as seen on their own, by link key — see RemoteInfo.seenAt. */
   seen?: Record<string, number>;
   /** Sites not to check for this creator, on top of the ones turned off for everyone. */
@@ -327,6 +329,21 @@ async function datePagesByFiles(group: CreatorGroup, remotes: RemoteInfo[], opts
       if (err instanceof CancelledError && (!opts.signal || opts.signal.aborted)) throw err;
     }
   }
+}
+
+/**
+ * Checks a page the user has just added to a creator, on its own and outside a check, so the row
+ * changes now rather than at the next check: the page, and its file list where it is a LoversLab page
+ * that looks newer (as a check does). Undefined for a page that lists other pages (a wicked.cc
+ * index): expanding those is a check's job. `current` is the creator's pages as they stand.
+ */
+export async function checkAddedPage(group: CreatorGroup, listing: Listing, current: readonly RemoteInfo[], opts: CheckOptions): Promise<RemoteInfo | undefined> {
+  const { info, findings } = await checkListing(listing, opts.fetcher, opts.now ?? Date.now, opts.signal);
+  if (findings?.expandTo?.length) return undefined;
+  const same = (r: RemoteInfo): boolean => linkKey(r.listing.url) === linkKey(listing.url);
+  const remotes = [...current.filter((r) => !same(r)), info];
+  await datePagesByFiles(group, remotes, opts);
+  return remotes.find(same);
 }
 
 async function checkListing(
