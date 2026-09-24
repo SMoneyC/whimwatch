@@ -53,7 +53,7 @@ import {
   UPDATE_SITES,
   type UpdateSite,
 } from '../shared/types.js';
-import { SOURCE_LABEL } from '../shared/labels.js';
+import { plainTitle, SOURCE_LABEL } from '../shared/labels.js';
 import { accountStatus, signIn, signOut } from './auth.js';
 import { BrowserPool, configureSiteSessions, siteSessionsPersist } from './browser.js';
 import { describeModsDirs, detectModsDirs } from './modsdir.js';
@@ -115,6 +115,10 @@ export class AppController {
     const controller = new AppController(statePath, backupRoot);
     controller.scanCache = await loadScanCache(controller.scanCachePath, statePath);
     controller.state = await loadState(statePath);
+    // Results saved before titles were cleaned when read: clean them now, not at the next check.
+    for (const creator of controller.state.lastResult?.creators ?? []) {
+      for (const r of [...creator.remotes, ...(creator.mutedRemotes ?? [])]) if (r.title) r.title = plainTitle(r.title);
+    }
     // Results saved by an older version predate allSitesOff: derive it now, not at the next check.
     controller.applyMuted();
     controller.pool.onVerificationNeeded = (site) => controller.emit({ type: 'verification-needed', site });

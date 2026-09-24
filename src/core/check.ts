@@ -10,6 +10,7 @@ import type {
   SourceId,
   UpdateSite,
 } from '../shared/types.js';
+import { plainTitle } from '../shared/labels.js';
 import { applyMutedSources } from '../shared/muted.js';
 import { UPDATE_SITES } from '../shared/types.js';
 import { creatorStatus, isNewer, outdatedRemotes } from './compare.js';
@@ -338,6 +339,7 @@ async function checkListing(
   if (listing.source === 'wwmod') return { info: { listing, checkedAt, status: 'error', error: 'Unsupported link' } };
   try {
     const { status, author: _author, patreonLinks, expandTo, ...rest } = await CHECKERS[listing.source](listing, fetcher);
+    if (rest.title !== undefined) rest.title = plainTitle(rest.title);
     return { info: { listing, checkedAt, status: status ?? 'ok', ...rest }, findings: { patreonLinks, expandTo } };
   } catch (err) {
     if (err instanceof CancelledError) {

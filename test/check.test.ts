@@ -253,6 +253,13 @@ describe('runCheck', () => {
     expect(single.calls.filter((u) => u.includes('do=download'))).toEqual([]);
   });
 
+  it('keeps page titles as plain text, however the creator styled them', async () => {
+    const lab = 'https://www.loverslab.com/files/file/3528-moonberry-animations/';
+    const styled = pages.LOVERSLAB_FILE.replaceAll('Tester Adult Animations', '\u200B𝑴𝒐𝒐𝒏𝒃𝒆𝒓𝒓𝒚\u200B Adult Animations');
+    const { result } = await runCheck({ dirs: [mods], fetcher: new FakeFetcher({ ...ROUTES, [lab]: styled }) });
+    expect(result.creators.find((c) => c.key === 'moonberry')!.remotes.find((r) => r.listing.url === lab)?.title).toBe('Moonberry Adult Animations');
+  });
+
   it('with wicked.cc off, uses pages found earlier without searching it again', async () => {
     const fetcher = new FakeFetcher(ROUTES);
     const { result, discoveryCache } = await runCheck({

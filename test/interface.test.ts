@@ -5,6 +5,7 @@ import type { CoreResult, CreatorResult, InstallRecord, RemoteInfo, SeenEvent } 
 import { rowAction, rowStatus, rowSummary, sortCreators, updateCandidates } from '../src/renderer/src/eligibility.js';
 import { acceleratorFromKey, acceleratorKeys, formatCount, plural, removedPageLabel, shortTitle, timeAgo } from '../src/renderer/src/format.js';
 import { gameHealth } from '../src/renderer/src/health.js';
+import { plainTitle } from '../src/shared/labels.js';
 import { dayLabel, fileCounts, historyItems, isUndone, matchesFilter } from '../src/renderer/src/history.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -99,6 +100,15 @@ describe('creator rows', () => {
     const { eligible, ineligible } = updateCandidates(undefined, [creator('A', 'update-available', [remote('wickedcc')]), creator('B', 'update-available', [remote('loverslab')])], snapshot());
     expect(eligible.map((c) => c.name)).toEqual(['A']);
     expect(ineligible).toEqual([{ key: 'b', name: 'B', reason: 'Sign in to LoversLab', signIn: 'loverslab' }]);
+  });
+});
+
+describe('page titles', () => {
+  it('are plain text: styled letters back to ordinary ones, zero-width spaces gone, emoji kept', () => {
+    expect(plainTitle('🍦\u200B𝑴𝒐𝒐𝒏𝒃𝒆𝒓𝒓𝒚\u200B🍦  Juniper   Petal ')).toBe('🍦Moonberry🍦 Juniper Petal');
+    expect(plainTitle('𝐓𝐡𝐨𝐫𝐧𝐰𝐨𝐨𝐝 v2')).toBe('Thornwood v2');
+    // Joined emoji stay one symbol: the joiner between them is kept.
+    expect(plainTitle('👩\u200D💻 Juniper Petal')).toBe('👩\u200D💻 Juniper Petal');
   });
 });
 
