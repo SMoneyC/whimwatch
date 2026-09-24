@@ -35,7 +35,7 @@ export function gameHealth(game: GameInfo | undefined, core: CoreResult, dismiss
       return {
         ...base,
         tone: 'warn',
-        title: 'Hold off playing for now',
+        title: 'Careful! Unsupported update detected',
         text: `The Sims 4 was patched to ${yourGame}, but WickedWhims only supports up to ${supportedUpTo}. Script mods often break after a patch. WhimWatch will flag the WickedWhims update as soon as it's out.`,
       };
     }

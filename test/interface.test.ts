@@ -132,7 +132,7 @@ describe('game health', () => {
 
   it('shows your version next to the supported one after a patch, and never mixes them up', () => {
     const health = gameHealth({ version: '1.128.10.1020' }, core, []);
-    expect(health).toMatchObject({ tone: 'warn', title: 'Hold off playing for now', yourGame: '1.128.10', supportedUpTo: '1.127.41' });
+    expect(health).toMatchObject({ tone: 'warn', title: 'Careful! Unsupported update detected', yourGame: '1.128.10', supportedUpTo: '1.127.41' });
   });
 
   it('puts "won\'t load" first, and hidden warnings stay hidden until the version changes', () => {
