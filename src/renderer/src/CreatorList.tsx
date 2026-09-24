@@ -17,7 +17,7 @@ import {
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { type CreatorResult, type RemoteInfo, UPDATE_SITES, type UpdateSite } from '../../shared/types';
 import { ownedRemotes } from '../../shared/updatable';
-import { AFTER_CHECK, gettableNewPack, type NewFile, newFilesFor, newPacksFor, rowAction, rowStatus, rowSummary, siteList } from './eligibility';
+import { AFTER_CHECK, gettableNewPack, ignoredFilesFor, type NewFile, newFilesFor, newPacksFor, rowAction, rowStatus, rowSummary, siteList } from './eligibility';
 import { formatVersion } from '../../shared/version';
 import { formatShortDate, plural, remoteSummary, shortTitle, SOURCE_LABEL, timeAgo } from './format';
 import { useToast } from './toast';
@@ -176,6 +176,7 @@ function CreatorDetails({
   const pages = ownedRemotes(c.remotes);
   const packs = newPacksFor(c, snapshot);
   const files = newFilesFor(c, snapshot);
+  const ignored = ignoredFilesFor(c, snapshot);
   const hiddenPacks = c.remotes.length - pages.length;
 
   return (
@@ -236,6 +237,24 @@ function CreatorDetails({
             ))}
           </div>
         </>
+      )}
+      {ignored.length > 0 && (
+        <p className="muted small off-note">
+          <BellOff size={14} aria-hidden="true" />
+          <span>
+            {ignored.length === 1 ? (hideTitles ? 'A file on their page' : ignored[0]!.name) : `${ignored.length} files on their pages`} {ignored.length === 1 ? 'is' : 'are'}{' '}
+            ignored.{' '}
+            <button
+              type="button"
+              className="link-btn accent"
+              onClick={() => void app.run(async () => {
+                for (const f of ignored) await api.setFileIgnored(c.key, f.name, false);
+              })}
+            >
+              Show {ignored.length === 1 ? 'it' : 'them'} again
+            </button>
+          </span>
+        </p>
       )}
       {hiddenPacks > 0 && packs.length === 0 && (
         <p className="muted small off-note">

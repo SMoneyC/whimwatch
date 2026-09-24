@@ -63,6 +63,19 @@ export function newFilesFor(c: CreatorResult, snapshot: AppSnapshot): NewFile[] 
   return c.remotes.flatMap((remote) => (remote.newFiles ?? []).filter((f) => !ignored.has(f.name.toLowerCase())).map((f) => ({ remote, ...f })));
 }
 
+/**
+ * Files the user said they weren't interested in that are still on one of the creator's pages, so
+ * the choice can be taken back once its toast is gone. Names no longer on a page aren't listed:
+ * there'd be nothing to bring back. Under the same setting as the files themselves.
+ */
+export function ignoredFilesFor(c: CreatorResult, snapshot: AppSnapshot): NewFile[] {
+  if (!snapshot.settings.showNewPacks) return [];
+  const ignored = new Set(snapshot.ignoredFiles?.[c.key] ?? []);
+  const found = c.remotes.flatMap((remote) => (remote.newFiles ?? []).filter((f) => ignored.has(f.name.toLowerCase())).map((f) => ({ remote, ...f })));
+  // One file on two pages is one file said no to, and one to bring back.
+  return found.filter((f, i) => found.findIndex((g) => g.name.toLowerCase() === f.name.toLowerCase()) === i);
+}
+
 /** A new pack can be downloaded when its own page can be: locked Patreon posts can only be opened. */
 export function gettableNewPack(remote: RemoteInfo, snapshot: AppSnapshot): boolean {
   return updatableRemotes([remote], signedInCheck(snapshot)).length > 0;

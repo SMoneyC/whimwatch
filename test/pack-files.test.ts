@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { datePageByFiles, dropInstalledFiles, startUnticked, updateExclusions, updateSkipped, versionless, wasSkipped, withoutVersion } from '../src/core/pack-files.js';
 import type { AppSnapshot } from '../src/shared/api.js';
 import type { CreatorResult, LocalFile, RemoteInfo } from '../src/shared/types.js';
-import { newFilesFor } from '../src/renderer/src/eligibility.js';
+import { ignoredFilesFor, newFilesFor } from '../src/renderer/src/eligibility.js';
 
 const at = (iso: string): number => Date.parse(iso);
 const page: RemoteInfo = {
@@ -81,6 +81,16 @@ describe("dating a LoversLab page by its files", () => {
     expect(newFilesFor(creator, snapshot(true)).map((f) => f.name)).toEqual(['WW_Moonberry_Juniper_Petal.package']);
     expect(newFilesFor(creator, snapshot(true, ['ww_moonberry_juniper_petal.package']))).toEqual([]);
     expect(newFilesFor(creator, snapshot(false))).toEqual([]);
+
+    // Said no to, and still on the page: listed so it can be shown again. A name no longer on
+    // any page has nothing to bring back.
+    const said = snapshot(true, ['ww_moonberry_juniper_petal.package', 'ww_moonberry_thornwood.package']);
+    expect(ignoredFilesFor(creator, said).map((f) => f.name)).toEqual(['WW_Moonberry_Juniper_Petal.package']);
+    expect(ignoredFilesFor(creator, snapshot(true))).toEqual([]);
+    expect(ignoredFilesFor(creator, snapshot(false, ['ww_moonberry_juniper_petal.package']))).toEqual([]);
+    // The same file on two of their pages is one file to bring back.
+    const twoPages = { key: 'moonberry', remotes: [creator.remotes[0]!, { ...creator.remotes[0]!, listing: { ...page.listing, url: `${page.listing.url}?second` } }] } as CreatorResult;
+    expect(ignoredFilesFor(twoPages, said)).toHaveLength(1);
   });
 });
 
