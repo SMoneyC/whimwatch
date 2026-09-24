@@ -1343,21 +1343,25 @@ button.chip {
   border-style: dashed;
 }
 
-/* A pack the user doesn't have: set apart from their own pages, never a status colour. */
+/* A pack the user doesn't have: set apart from their own pages, never a status colour. Its name is
+   what it's about, so it gets the whole row rather than half of one beside its button. */
 .source-card.new-pack {
   background: var(--raised);
+  grid-column: 1 / -1;
 }
 
 .source-card.new-pack .site-badge {
   background: var(--surface);
 }
 
-/* The title here is the pack's name, not a site's, so it has to be kept to one line. */
+/* The title here is the pack's or file's name, the one thing that tells two cards apart: up to two
+   lines before it gives way, broken anywhere since file names have no spaces. Hover shows it all. */
 .source-card.new-pack .source-title {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .source-card.new-pack .source-sub {

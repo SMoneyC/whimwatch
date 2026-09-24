@@ -178,8 +178,8 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
     ? `From ${target.name}${postedAt !== undefined ? ` · posted ${formatShortDate(postedAt)}` : ''}`
     : target.key !== CORE_KEY && creator?.remoteUpdatedAt !== undefined
       ? // Against the files from this pack where the page named them, not the creator's newest file:
-        // "you have files from Sep 17" under a pack you last updated in 2024 helps nobody.
-        `Update posted ${timeAgo(creator.remoteUpdatedAt)} · you have files from ${formatShortDate(behindPage?.yoursAt ?? creator.localUpdatedAt)}`
+      // "you have files from Sep 17" under a pack you last updated in 2024 helps nobody.
+      `Update posted ${timeAgo(creator.remoteUpdatedAt)} · you have files from ${formatShortDate(behindPage?.yoursAt ?? creator.localUpdatedAt)}`
       : undefined;
 
   return (

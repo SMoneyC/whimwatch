@@ -223,9 +223,7 @@ function CreatorDetails({
         <>
           <div className="section-label">Packs you don't have</div>
           <p className="muted small">
-            Nothing in your folders matches {packs.length === 1 ? 'this page' : 'these pages'}. {packs.length === 1 ? "It's" : "They're"} new content rather
-            than a newer version of something you have, so WhimWatch never counts {packs.length === 1 ? 'it' : 'them'} as an update or installs{' '}
-            {packs.length === 1 ? 'it' : 'them'} with Update all.
+            Nothing in your folders matches {packs.length === 1 ? 'this page' : 'these pages'}. Not counted as updates.
           </p>
           <div className="source-grid">
             {packs.map((r) => (
@@ -239,7 +237,7 @@ function CreatorDetails({
         <>
           <div className="section-label">New on {files.length === 1 ? 'a page' : 'pages'} of theirs</div>
           <p className="muted small">
-            {files.length === 1 ? 'This file was' : 'These files were'} added to a page that also has one of your packs - Not counted as an update, and 'Update all' leaves {files.length === 1 ? 'it' : 'them'} alone.
+            {files.length === 1 ? 'This file was' : 'These files were'} added to a page that also has one of your packs. Not counted as updates.
           </p>
           <div className="source-grid">
             {files.map((f) => (
@@ -287,8 +285,8 @@ function CreatorDetails({
         <p className="muted small off-note">
           <PackagePlus size={14} aria-hidden="true" />
           <span>
-            {hiddenPacks === 1 ? '1 page is' : `${hiddenPacks} pages are`} for packs you don't have. {hiddenPacks === 1 ? "It isn't" : "They aren't"} counted as
-            updates. Turn on <em>Show packs you don't have</em> in Settings → General to list {hiddenPacks === 1 ? 'it' : 'them'}.
+            {hiddenPacks === 1 ? '1 page is' : `${hiddenPacks} pages are`} for packs you don't have, not counted as updates.
+            Turn on <em>Show packs you don't have</em> in Settings → General to list {hiddenPacks === 1 ? 'it' : 'them'}.
           </span>
         </p>
       )}
@@ -482,8 +480,7 @@ function NewPackCard({
               rather than a download button that 403s, which is the point of both. */}
           {r.locked && <Lock size={13} className="faint" aria-label="Patrons only" />}
         </span>
-        {/* Date first: it's the half of this line that survives a narrow card. */}
-        <span className="source-sub faint">{formatShortDate(r.updatedAt)} · not in your folders</span>
+        <span className="source-sub faint">Posted {formatShortDate(r.updatedAt)}</span>
       </div>
       {gettable ? (
         <Button
@@ -559,7 +556,7 @@ function NewFileCard({
         <span className="source-title" title={name}>
           {name}
         </span>
-        <span className="source-sub faint">{formatShortDate(file.updatedAt)} · not in your folders</span>
+        <span className="source-sub faint">Posted {formatShortDate(file.updatedAt)}</span>
       </div>
       {gettable ? (
         <Button
