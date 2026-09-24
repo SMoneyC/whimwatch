@@ -117,3 +117,30 @@ export function acceleratorFromKey(
   if (!parts.some((p) => p !== 'Shift') && !key.startsWith('F')) return undefined;
   return [...parts, key].join('+');
 }
+
+/**
+ * A removed page, told apart by its address: only the address is kept, not the page's title. Its
+ * site plus the readable end of the address ("wicked.cc · sm-sims/lace-set"); with page titles
+ * hidden, the site alone, since the address names the pack as plainly as a title would.
+ */
+export function removedPageLabel(url: string, hideTitles: boolean): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return 'A page';
+  }
+  const host = parsed.hostname.replace(/^www\./, '');
+  const site = host === 'wicked.cc' ? 'wicked.cc' : host === 'loverslab.com' ? 'LoversLab' : host === 'patreon.com' ? 'Patreon' : host;
+  if (hideTitles) return `A ${site} page`;
+  const parts = parsed.pathname.split('/').filter(Boolean).map((p) => {
+    try {
+      return decodeURIComponent(p);
+    } catch {
+      return p;
+    }
+  });
+  // LoversLab: /files/file/1234-the-slug; wicked.cc: /animations/creator/pack; Patreon: /creator or /posts/title-id.
+  const readable = site === 'LoversLab' ? parts.at(-1)?.replace(/^\d+-/, '') : parts.slice(-2).join('/');
+  return readable ? `${site} · ${shortTitle(readable, 48)}` : site;
+}

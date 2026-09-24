@@ -34,6 +34,8 @@ const CREATOR_CONCURRENCY = 6;
 export interface CreatorLinkPrefs {
   rejected: string[];
   manual: string[];
+  /** The removed pages (in rejected) that the user had added by hand; see core/link-prefs.ts. */
+  rejectedManual?: string[];
   /** Pages marked as seen on their own, by link key — see RemoteInfo.seenAt. */
   seen?: Record<string, number>;
   /** Sites not to check for this creator, on top of the ones turned off for everyone. */

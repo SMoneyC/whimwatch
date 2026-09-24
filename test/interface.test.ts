@@ -3,7 +3,7 @@ import { runBatch } from '../src/core/batch.js';
 import type { AppSnapshot } from '../src/shared/api.js';
 import type { CoreResult, CreatorResult, InstallRecord, RemoteInfo, SeenEvent } from '../src/shared/types.js';
 import { rowAction, rowStatus, rowSummary, sortCreators, updateCandidates } from '../src/renderer/src/eligibility.js';
-import { acceleratorFromKey, acceleratorKeys, formatCount, plural, shortTitle, timeAgo } from '../src/renderer/src/format.js';
+import { acceleratorFromKey, acceleratorKeys, formatCount, plural, removedPageLabel, shortTitle, timeAgo } from '../src/renderer/src/format.js';
 import { gameHealth } from '../src/renderer/src/health.js';
 import { dayLabel, fileCounts, historyItems, isUndone, matchesFilter } from '../src/renderer/src/history.js';
 
@@ -99,6 +99,17 @@ describe('creator rows', () => {
     const { eligible, ineligible } = updateCandidates(undefined, [creator('A', 'update-available', [remote('wickedcc')]), creator('B', 'update-available', [remote('loverslab')])], snapshot());
     expect(eligible.map((c) => c.name)).toEqual(['A']);
     expect(ineligible).toEqual([{ key: 'b', name: 'B', reason: 'Sign in to LoversLab', signIn: 'loverslab' }]);
+  });
+});
+
+describe('removed pages', () => {
+  it('are told apart by their address, or by site alone with page titles hidden', () => {
+    expect(removedPageLabel('https://wicked.cc/animations/moonberry/juniper-petal', false)).toBe('wicked.cc · moonberry/juniper-petal');
+    expect(removedPageLabel('https://www.loverslab.com/files/file/3528-moonberry-thornwood/', false)).toBe('LoversLab · moonberry-thornwood');
+    expect(removedPageLabel('https://www.patreon.com/posts/velvet-set-12345', false)).toBe('Patreon · posts/velvet-set-12345');
+    // The address names the pack as plainly as a title would.
+    expect(removedPageLabel('https://wicked.cc/animations/moonberry/juniper-petal', true)).toBe('A wicked.cc page');
+    expect(removedPageLabel('not an address', false)).toBe('A page');
   });
 });
 

@@ -1,0 +1,1 @@
+- Pages you removed from a creator, with "Not this creator's page" or "Not interested" in a pack, are listed under "N pages hidden" in the creator's details, and each can be shown again. Before, the Undo in the toast was the only way back.

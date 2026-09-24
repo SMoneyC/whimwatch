@@ -19,7 +19,7 @@ import { type CreatorResult, type RemoteInfo, UPDATE_SITES, type UpdateSite } fr
 import { ownedRemotes } from '../../shared/updatable';
 import { AFTER_CHECK, gettableNewPack, ignoredFilesFor, type NewFile, newFilesFor, newPacksFor, rowAction, rowStatus, rowSummary, siteList } from './eligibility';
 import { formatVersion } from '../../shared/version';
-import { formatShortDate, plural, remoteSummary, shortTitle, SOURCE_LABEL, timeAgo } from './format';
+import { formatShortDate, plural, remoteSummary, removedPageLabel, shortTitle, SOURCE_LABEL, timeAgo } from './format';
 import { useToast } from './toast';
 import type { UpdateTarget } from './UpdateDialog';
 import { api, type AppModel } from './useApp';
@@ -177,6 +177,16 @@ function CreatorDetails({
   const packs = newPacksFor(c, snapshot);
   const files = newFilesFor(c, snapshot);
   const ignored = ignoredFilesFor(c, snapshot);
+  // Pages removed with "Not this creator's page" or "Not interested": listed so either can be taken
+  // back after its toast is gone. Only their addresses are kept.
+  const removed = snapshot.rejectedLinks[c.key] ?? [];
+  const toast = useToast();
+  const showPageAgain = async (url: string): Promise<void> => {
+    const done = await app.run(() => api.unrejectLink(c.key, url));
+    if (!done) return;
+    // No "Check now": that checks every creator, a lot of traffic to bring back one page.
+    toast({ text: 'This page will be shown on the next check' });
+  };
   const hiddenPacks = c.remotes.length - pages.length;
 
   return (
@@ -255,6 +265,23 @@ function CreatorDetails({
             </button>
           </span>
         </p>
+      )}
+      {removed.length > 0 && (
+        <Disclosure summary={`${plural(removed.length, 'page')} hidden`} className="removed-pages">
+          <p className="muted small">
+            You opted to remove {removed.length === 1 ? 'this page' : 'these pages'}.
+          </p>
+          <ul className="file-list">
+            {removed.map((url) => (
+              <li key={url}>
+                <span className="small grow">{removedPageLabel(url, hideTitles)}</span>
+                <button type="button" className="link-btn accent small" onClick={() => void showPageAgain(url)}>
+                  Show again
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Disclosure>
       )}
       {hiddenPacks > 0 && packs.length === 0 && (
         <p className="muted small off-note">

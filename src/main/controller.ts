@@ -22,6 +22,7 @@ import { catchUpCreator, CORE_KEY, coreResult, refreshCreatorStatus, runCheck, u
 import { isNewer, outdatedRemotes, seenMark } from '../core/compare.js';
 import { groupByCreator } from '../core/creators.js';
 import { datePacks } from '../core/ownership.js';
+import { removeLink, restoreLink } from '../core/link-prefs.js';
 import { dropInstalledFiles, updateSkipped } from '../core/pack-files.js';
 import { BUNDLED_OVERRIDES, loadOverrides, type Overrides } from '../core/overrides.js';
 import { filesFromCache, rescanPaths, type ScanCache, scanDirs } from '../core/scanner.js';
@@ -95,7 +96,7 @@ export class AppController {
   /** Set once the user confirmed "Remove all data": nothing else should run on the way out. */
   removingData = false;
   /** The link removed last, so its toast can put it back. */
-  private lastRejected?: { key: string; url: string; wasManual: boolean; removed: [CreatorResult, RemoteInfo[]][] };
+  private lastRejected?: { key: string; url: string; removed: [CreatorResult, RemoteInfo[]][] };
   /**
    * Creators the running check has finished, which the list shows in place of the saved ones until
    * it ends. They become the check's result, so changes made meanwhile (mark as seen, a site turned
@@ -892,7 +893,7 @@ export class AppController {
     const k = str(key);
     const prefs = this.prefs(k);
     const same = (u: string): boolean => linkKey(u) === linkKey(link);
-    prefs.rejected = prefs.rejected.filter((u) => !same(u));
+    restoreLink(prefs, link);
     if (!prefs.manual.some(same)) prefs.manual.push(link);
     // Adding a page on a site turned off for this creator means they want it checked again.
     if (prefs.mutedSources?.includes(site)) return this.setCreatorSite(k, site, true);
@@ -903,17 +904,27 @@ export class AppController {
     const k = str(key);
     const link = str(url);
     const same = (u: string): boolean => linkKey(u) === linkKey(link);
-    const prefs = this.prefs(k);
-    const wasManual = prefs.manual.some(same);
-    prefs.manual = prefs.manual.filter((u) => !same(u));
-    if (!prefs.rejected.some(same)) prefs.rejected.push(link);
+    removeLink(this.prefs(k), link);
     const removed = this.copiesOf(k).map((creator): [CreatorResult, RemoteInfo[]] => {
       const gone = creator.remotes.filter((r) => same(r.listing.url));
       creator.remotes = creator.remotes.filter((r) => !same(r.listing.url));
       return [creator, gone];
     });
-    this.lastRejected = { key: k, url: link, wasManual, removed };
+    this.lastRejected = { key: k, url: link, removed };
     this.refreshStatuses();
+    return this.commit();
+  }
+
+  /**
+   * Takes a page off the creator's removed pages, whenever it was removed ("Not this creator's
+   * page", or "Not interested" in a pack): it comes back at the next check, found as before, and a
+   * page the user had added by hand is added back. The toast's Undo only reaches the page removed last.
+   */
+  async unrejectLink(key: unknown, url: unknown): Promise<AppSnapshot> {
+    const link = str(url);
+    if (!link || link.length > 2048) throw new Error('That page address is not valid.');
+    const prefs = this.state.linkPrefs[str(key)];
+    if (prefs) restoreLink(prefs, link);
     return this.commit();
   }
 
@@ -922,9 +933,7 @@ export class AppController {
     const k = str(key);
     const link = str(url);
     if (!stash || stash.key !== k || linkKey(stash.url) !== linkKey(link)) throw new Error("That link can't be put back any more. Add it again under the creator.");
-    const prefs = this.prefs(k);
-    prefs.rejected = prefs.rejected.filter((u) => linkKey(u) !== linkKey(link));
-    if (stash.wasManual) prefs.manual.push(stash.url);
+    restoreLink(this.prefs(k), link);
     for (const [creator, remotes] of stash.removed) creator.remotes.push(...remotes);
     this.lastRejected = undefined;
     this.refreshStatuses();

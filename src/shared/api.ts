@@ -224,6 +224,8 @@ export interface WhimWatchApi {
   rejectLink(key: string, url: string): Promise<AppSnapshot>;
   /** Puts back the link removed by the last rejectLink (the undo in its toast). */
   undoRejectLink(key: string, url: string): Promise<AppSnapshot>;
+  /** Puts back any removed page (see rejectedLinks); it's found again by the next check. */
+  unrejectLink(key: string, url: string): Promise<AppSnapshot>;
   /** Turns one site off (or back on) for one creator. */
   setCreatorSite(key: string, site: UpdateSite, on: boolean): Promise<AppSnapshot>;
   /** "Not interested" in a new file on one of the creator's pages (RemoteInfo.newFiles), or its undo. */
@@ -300,6 +302,7 @@ export const API_METHODS = [
   'addLink',
   'rejectLink',
   'undoRejectLink',
+  'unrejectLink',
   'setCreatorSite',
   'setFileIgnored',
   'openExternal',
