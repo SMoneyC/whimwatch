@@ -120,7 +120,7 @@ export function acceleratorFromKey(
 
 /**
  * A removed page, told apart by its address: only the address is kept, not the page's title. Its
- * site plus the readable end of the address ("wicked.cc · sm-sims/lace-set"); with page titles
+ * site plus the readable end of the address ("wicked.cc · moonberry/juniper-petal"); with page titles
  * hidden, the site alone, since the address names the pack as plainly as a title would.
  */
 export function removedPageLabel(url: string, hideTitles: boolean): string {

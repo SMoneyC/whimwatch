@@ -417,7 +417,7 @@ function Accounts({ snapshot, app, onPrivacy }: { snapshot: AppSnapshot; app: Ap
               <span className="setting-title">{a.label}</span>
               <span className="setting-hint">
                 {a.signedIn ? 'Signed in' : 'Not signed in'}
-                {snapshot.settings.mutedSources.includes(a.site) && ' · turned off in General, so it isn’t checked'}
+                {snapshot.settings.mutedSources.includes(a.site) && ' · Turned off in General, so it isn’t checked'}
               </span>
             </div>
             <span className="spacer" />
@@ -541,7 +541,7 @@ function Storage({ snapshot, app }: { snapshot: AppSnapshot; app: AppModel }) {
             Delete all…
           </Button>
         </SettingRow>
-        <SettingRow title="Downloads, browsing data and log" hint={`${storage ? formatBytes(storage.caches) : '…'} · clearing keeps your sign-ins and settings`}>
+        <SettingRow title="Downloads, browsing data and log" hint={`${storage ? formatBytes(storage.caches) : '…'} · Clearing keeps your sign-ins and settings`}>
           <Button size="sm" onClick={clearCaches}>
             Clear
           </Button>

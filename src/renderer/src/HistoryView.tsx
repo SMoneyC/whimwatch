@@ -54,7 +54,7 @@ export function HistoryView({ app, onBack, onBackupSettings }: { app: AppModel; 
           <div className="card backup-summary">
             <Database size={16} aria-hidden="true" />
             <span className="muted">
-              Backups use <strong>{storage ? formatBytes(storage.backups) : '…'}</strong> · {keep > 0 ? `kept ${keep} days` : 'kept until deleted'}
+              Backups use <strong>{storage ? formatBytes(storage.backups) : '…'}</strong> · {keep > 0 ? `Kept ${keep} days` : 'Kept until deleted'}
             </span>
             <Button variant="quiet" size="sm" onClick={onBackupSettings}>
               Change
@@ -106,7 +106,7 @@ function HistoryEntry({ item, app }: { item: HistoryItem; app: AppModel }) {
     const names = [...new Set(event.entries.map((e) => e.name))];
     const title = names.length === 1 ? `Marked ${names[0]} as seen` : `Marked ${plural(names.length, 'update')} as seen`;
     const detail = undone
-      ? `Undone ${formatShortDate(event.undoneAt)} · these show as updates again`
+      ? `Undone ${formatShortDate(event.undoneAt)} · These show as updates again`
       : `${event.automatic ? 'The download matched your files' : event.kind === 'all' ? 'Mark all as seen' : 'Hidden until a newer release is posted'} · ${formatTime(event.at)}`;
     return (
       <li className={`history-item ${undone ? 'undone' : ''}`}>
@@ -156,7 +156,7 @@ function HistoryEntry({ item, app }: { item: HistoryItem; app: AppModel }) {
   let detail: string;
   if (undone) {
     // Nothing is backed up for a file that wasn't there before, so undoing a pack only removes it.
-    const what = undoRestoresFiles(records) ? 'your old files were put back' : 'the files it added were removed';
+    const what = undoRestoresFiles(records) ? 'Your old files were put back' : 'The files it added were removed';
     detail = `Undone ${formatShortDate(Math.max(...records.map((r) => r.undoneAt ?? 0)))} · ${what}`;
   } else if (!live.length) detail = `${backupGone(records)} · ${formatShortDate(item.at)}`;
   else
@@ -194,7 +194,7 @@ function HistoryEntry({ item, app }: { item: HistoryItem; app: AppModel }) {
                 <li key={r.id} className={r.undoneAt ? 'faint' : ''}>
                   {r.name}
                   {r.source && <span className="faint"> from {SOURCE_LABEL[r.source]}</span>}
-                  {r.undoneAt && <span className="faint"> · undone</span>}
+                  {r.undoneAt && <span className="faint"> · Undone</span>}
                 </li>
               ))}
             </ul>

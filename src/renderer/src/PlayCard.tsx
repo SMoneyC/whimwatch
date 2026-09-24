@@ -94,9 +94,9 @@ function WickedWhimsLine({ core, app, onUpdate, compact }: { core: CoreResult; a
   const subject = compact ? 'WickedWhims ' : '';
   let detail: string;
   if (core.error && !core.latestVersion) detail = "Couldn't read the WickedWhims download page";
-  else if (!installed) detail = `${compact ? "WickedWhims isn't" : "Isn't"} in your Mods folders${core.latestVersion ? ` · v${core.latestVersion} is the latest` : ''}`;
-  else if (core.status === 'update-available') detail = `${subject}v${core.latestVersion} is out · you have the ${formatShortDate(installed.mtimeMs)} build`;
-  else detail = core.latestVersion ? `${subject}v${core.latestVersion} · released ${formatCalendarDate(core.releasedAt)}` : `${subject}installed ${formatShortDate(installed.mtimeMs)}`;
+  else if (!installed) detail = `${compact ? "WickedWhims isn't" : "Isn't"} in your Mods folders${core.latestVersion ? ` · Latest is v${core.latestVersion}` : ''}`;
+  else if (core.status === 'update-available') detail = `${subject}v${core.latestVersion} is out · You have the ${formatShortDate(installed.mtimeMs)} build`;
+  else detail = core.latestVersion ? `${subject}v${core.latestVersion} · Released ${formatCalendarDate(core.releasedAt)}` : `${subject}installed ${formatShortDate(installed.mtimeMs)}`;
 
   return (
     <div className={`ww-line ${compact ? 'compact' : ''}`}>
