@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { datePageByFiles, dropInstalledFiles, startUnticked, updateExclusions, updateSkipped, versionless, wasSkipped, withoutVersion } from '../src/core/pack-files.js';
+import { currentByDate, datePageByFiles, dropInstalledFiles, startUnticked, updateExclusions, updateSkipped, versionless, wasSkipped, withoutVersion } from '../src/core/pack-files.js';
 import type { AppSnapshot } from '../src/shared/api.js';
 import type { CreatorResult, LocalFile, RemoteInfo } from '../src/shared/types.js';
 import { ignoredFilesFor, newFilesFor } from '../src/renderer/src/eligibility.js';
@@ -60,8 +60,11 @@ describe("dating a LoversLab page by its files", () => {
     const ignored = ['ww_moonberry_thornwood.package', 'ww_moonberry_velvet.package'];
     // Velvet was said no to, then installed from the page by hand: it's theirs now.
     expect(updateExclusions(listPage, ignored, [local('WW_Moonberry_Velvet.package')])).toEqual(['WW_Moonberry_Juniper_Petal.package', 'ww_moonberry_thornwood.package']);
-    // A single-file entry has nothing to pick from, so nothing is asked for.
-    expect(updateExclusions({ ...listPage, chooserUrl: undefined }, ignored, [])).toEqual([]);
+    // Saved without a list (an older version, or markup that hid it): still given, for the download to
+    // apply if the button leads to a list after all.
+    expect(updateExclusions({ ...listPage, chooserUrl: undefined }, ignored, [])).toEqual(['WW_Moonberry_Juniper_Petal.package', ...ignored]);
+    // Not a LoversLab page: nothing to pick from.
+    expect(updateExclusions({ ...listPage, listing: { ...listPage.listing, source: 'wickedcc' } }, ignored, [])).toEqual([]);
   });
 
   it("changes nothing when no file on the list is theirs by name", () => {
@@ -161,5 +164,37 @@ describe('remembering files the user left out', () => {
     // Nor does a check note them as variants.
     const withZip = [...listed, { href: 'r=4', name: 'WW_Moonberry_Animations_All.zip', updatedAt: at('2026-07-30T13:30:28Z') }];
     expect(datePageByFiles(page, withZip, [local('WW_Moonberry_Animations.package')]).variants).toEqual(['WW_Moonberry_Animations_NoSound.package']);
+  });
+});
+
+describe('telling from dates alone that an update has nothing new', () => {
+  // Their copy of the pack is from Sep 14; the list says when each file was posted.
+  const theirs = [local('WW_Moonberry_Animations.package')];
+
+  it("counts a file of theirs posted no later than their copy as current, so it isn't downloaded", () => {
+    const list = [
+      { href: 'r=1', name: 'WW_Moonberry_Animations.package', updatedAt: at('2026-07-30T13:30:28Z') },
+      { href: 'r=2', name: 'WW_Moonberry_Juniper_Petal.package', updatedAt: at('2026-07-30T13:30:28Z') },
+      { href: 'r=3', name: 'WW_Moonberry_Thornwood.package' },
+    ];
+    // Juniper Petal isn't theirs, and Thornwood has no date: neither is known to be current.
+    expect(currentByDate(list, theirs)).toEqual(['ww_moonberry_animations.package']);
+  });
+
+  it('never counts a file posted after their copy, even by an hour', () => {
+    const list = [{ href: 'r=1', name: 'WW_Moonberry_Animations.package', updatedAt: at('2026-09-14T06:36:12Z') }];
+    expect(currentByDate(list, theirs)).toEqual([]);
+    // A copy installed by hand keeps the creator's older build date, so it is downloaded and compared.
+    expect(currentByDate(list, [{ ...theirs[0]!, mtimeMs: at('2026-09-01T00:00:00Z') }])).toEqual([]);
+  });
+
+  it("lets this creator's own copy decide, and another creator's only for a name this one lacks", () => {
+    const list = [{ href: 'r=1', name: 'English.package', updatedAt: at('2026-09-10T00:00:00Z') }];
+    const another = [{ ...local('English.package'), mtimeMs: at('2026-09-20T00:00:00Z') }];
+    // Only another creator has an English.package: that copy is all there is to go on.
+    expect(currentByDate(list, theirs, another)).toEqual(['english.package']);
+    // This creator has their own, older one: theirs decides, whatever another creator holds.
+    const own = [...theirs, { ...local('English.package'), mtimeMs: at('2026-09-01T00:00:00Z') }];
+    expect(currentByDate(list, own, another)).toEqual([]);
   });
 });

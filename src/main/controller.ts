@@ -294,7 +294,9 @@ export class AppController {
    * author and so sit under no creator. The same list the rescan after an install uses.
    */
   installedFiles(): LocalFile[] {
-    return filesFromCache(this.scanCache) ?? this.state.lastResult?.creators.flatMap((c) => c.files) ?? [];
+    // An empty cache (never scanned here, or just cleared) is no answer either: use the saved results.
+    const cached = filesFromCache(this.scanCache);
+    return cached?.length ? cached : (this.state.lastResult?.creators.flatMap((c) => c.files) ?? []);
   }
 
   /**

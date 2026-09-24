@@ -16,7 +16,7 @@ import {
   safeFileName,
 } from '../core/downloads.js';
 import { CancelledError, type Fetcher, throwIfCancelled } from '../core/fetcher.js';
-import { parseDownloadChooser } from '../core/sources/loverslab.js';
+import { type ChooserFile, chooserFor, parseDownloadChooser, parseLoversLabFile } from '../core/sources/loverslab.js';
 import { linkedPostIds, parsePostDetail, patreonPostId, type PatreonPostDetail, postDetailApiUrl, releaseDownloads } from '../core/sources/patreon.js';
 import type { RemoteInfo } from '../shared/types.js';
 import { type BrowserPool, type BrowserSite, useSiteSession } from './browser.js';
@@ -44,6 +44,8 @@ export async function downloadForRemote(
   onProgress: FileProgressFn,
   signal?: AbortSignal,
   offer?: Offer,
+  /** Files to leave out if following the download leads to a list of files (see updateExclusions). */
+  except: readonly string[] = [],
 ): Promise<string[]> {
   await mkdir(dir, { recursive: true });
   switch (remote.listing.source) {
@@ -53,7 +55,7 @@ export async function downloadForRemote(
     case 'patreon': {
       const site = remote.listing.source;
       const resolved = offer ?? (await resolveOffer(remote, deps.pool, { probe: false, signal }));
-      return downloadOffer(site, resolved, dir, onProgress, signal);
+      return downloadOffer(site, resolved, dir, onProgress, signal, except);
     }
     default:
       throw new DownloadUnavailableError('This source has no downloads.');
@@ -84,6 +86,28 @@ export async function resolveOffer(
   if (probe.status >= 400) throw new Error(`LoversLab returned HTTP ${probe.status}`);
   if (!probe.body && opts.only) throw new DownloadUnavailableError(`${opts.only} can't be picked out of this LoversLab page. Open the page to get it.`);
   return probe.body ? chooserOffer(probe.body, remote.listing.url, opts.only, opts.except) : { files: [offer.button] };
+}
+
+/**
+ * A LoversLab entry's list of files, with each file's name and upload date, when its button opens
+ * one. Whether it does is read from the entry page as it is now, not from the last check, so results
+ * saved by an older version work too; a single-file entry's button is the download itself and is
+ * never followed here, or the file would be fetched twice. Without a list, the page's download
+ * button comes back instead, so the download needn't load the page again to find it.
+ */
+export async function loversLabFileList(remote: RemoteInfo, pool: BrowserPool, signal?: AbortSignal): Promise<{ listed?: ChooserFile[]; button?: string }> {
+  const page = await pool.fetcher().browserGet!(remote.listing.url);
+  throwIfCancelled(signal);
+  const list = chooserFor(parseLoversLabFile(page.body).chooserUrl, page.url, remote.listing.url);
+  if (!list) {
+    const href = cheerio.load(page.body)('a[href*="do=download"]').first().attr('href');
+    return { button: href ? new URL(href, remote.listing.url).toString() : undefined };
+  }
+  const probe = await pool.probeInPage(remote.listing.url, list);
+  throwIfCancelled(signal);
+  if (probe.status >= 400 || !probe.body) return {};
+  const listed = parseDownloadChooser(probe.body, remote.listing.url);
+  return listed.length ? { listed } : {};
 }
 
 export function offerFileCount(offer: Offer): number {
@@ -150,7 +174,14 @@ async function patreonPost(pool: BrowserPool, pageUrl: string, postId: string, s
   return parsePostDetail(res.body);
 }
 
-async function downloadOffer(site: BrowserSite, offer: Offer, dir: string, onProgress: FileProgressFn, signal?: AbortSignal): Promise<string[]> {
+async function downloadOffer(
+  site: BrowserSite,
+  offer: Offer,
+  dir: string,
+  onProgress: FileProgressFn,
+  signal?: AbortSignal,
+  except: readonly string[] = [],
+): Promise<string[]> {
   if ('external' in offer) return [await downloadExternal(offer.external, dir, (r, t) => onProgress(r, t, { index: 0, count: 1 }), signal)];
   if ('files' in offer) return downloadAll(site, offer.files, dir, onProgress, signal);
 
@@ -159,7 +190,8 @@ async function downloadOffer(site: BrowserSite, offer: Offer, dir: string, onPro
   if (!first.html) return [first.path];
   const html = await readFile(first.path, 'utf8');
   await rm(first.path, { force: true });
-  return downloadOffer(site, chooserOffer(html, offer.button), dir, onProgress, signal);
+  // The button led to a list after all: what the user set aside stays out, however it was reached.
+  return downloadOffer(site, chooserOffer(html, offer.button, undefined, except), dir, onProgress, signal);
 }
 
 /** Downloads one after another (never in parallel) to stay gentle with the site. */

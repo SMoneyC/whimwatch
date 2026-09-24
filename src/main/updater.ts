@@ -5,9 +5,10 @@ import { ARCHIVE_FILE, extractDownload, MOD_FILE } from '../core/archive.js';
 import { dirSize, hasLiveBackup, removeDir } from '../core/backups.js';
 import { runBatch, StopBatchError } from '../core/batch.js';
 import { CORE_KEY } from '../core/check.js';
+import { chooserDownloads, DownloadUnavailableError } from '../core/downloads.js';
 import { CancelledError, throwIfCancelled } from '../core/fetcher.js';
 import { applyInstall, markUnchanged, planInstall, undoInstall } from '../core/installer.js';
-import { startUnticked, updateExclusions } from '../core/pack-files.js';
+import { currentByDate, startUnticked, updateExclusions } from '../core/pack-files.js';
 import { isGameRunning } from '../core/process.js';
 import { chooseRemote } from '../core/source-choice.js';
 import type { AppSnapshot, BatchState, StorageInfo, UpdateChoice, UpdatePlan, UpdateStage } from '../shared/api.js';
@@ -16,7 +17,7 @@ import type { CheckResult, LocalFile, RemoteInfo } from '../shared/types.js';
 import { laterSources, laterSourcesText, updatableRemotes, updateSources } from '../shared/updatable.js';
 import { sessionsToClear, siteSession } from './browser.js';
 import type { AppController } from './controller.js';
-import { downloadForRemote, type Offer, offerFileCount, resolveOffer } from './downloads.js';
+import { downloadForRemote, loversLabFileList, type Offer, offerFileCount, resolveOffer } from './downloads.js';
 import { clearLog } from './log.js';
 import { clearSiteBrowsingData } from './privacy.js';
 
@@ -38,6 +39,8 @@ interface InstallMeta {
 interface PlanOptions {
   /** Automatic installs: never use LoversLab/Patreon accounts. */
   publicOnly?: boolean;
+  /** Download and compare even what the page's dates say the user has ("Download and compare anyway"). */
+  ignoreDates?: boolean;
   /** Download only the file of this name from the page's list (a new file on a page of theirs). */
   onlyFile?: string;
 }
@@ -61,7 +64,7 @@ export class Updater {
   async plan(key: unknown, listingUrl?: unknown, opts: PlanOptions = {}): Promise<UpdatePlan> {
     if (typeof key !== 'string') throw new Error('Expected a creator key');
     const url = typeof listingUrl === 'string' ? listingUrl : undefined;
-    const id = `${key}|${url ?? ''}|${opts.publicOnly ? 'public' : 'any'}|${opts.onlyFile ?? ''}`;
+    const id = `${key}|${url ?? ''}|${opts.publicOnly ? 'public' : 'any'}|${opts.onlyFile ?? ''}|${opts.ignoreDates ? 'compare' : 'dates'}`;
     const pending = this.preparing.get(id);
     if (pending) return pending;
     const promise = this.exclusive(() => this.prepare(key, url, opts)).finally(() => this.preparing.delete(id));
@@ -122,6 +125,12 @@ export class Updater {
             if (plan.warnings.some((w) => w.startsWith('The Sims 4 is running'))) {
               throw new StopBatchError('Close The Sims 4 first, then run Update all again.');
             }
+            if (plan.byDate) {
+              // Only the page's dates say so, with nothing downloaded or compared: not enough to mark it
+              // seen on the user's behalf, or to record that the files matched. The Update window asks.
+              await this.discardPlans(key);
+              return `By the page's dates you already have these files from ${SOURCE_LABEL[plan.source]}. Open its Update window to mark it as seen, or to download and compare anyway.`;
+            }
             if (plan.upToDate) {
               await this.discardPlans(key);
               await this.controller.markSeen(key, plan.downloadUrl, { automatic: true });
@@ -148,7 +157,7 @@ export class Updater {
             return {
               // Left out without anyone asking, so said out loud: the file is still one tick away.
               message: `Installed ${changed.length} file${changed.length === 1 ? '' : 's'} from ${SOURCE_LABEL[plan.source]}${
-                plan.startUnticked?.length ? ` · left out ${plan.startUnticked.length} you skipped before` : ''
+                plan.startUnticked?.length ? ` · Left out ${plan.startUnticked.length} you skipped before` : ''
               }${plan.warnings.length ? ` (${plan.warnings[0]})` : ''}`,
               replaced: changed.filter((f) => f.kind === 'replace').length,
               added: changed.filter((f) => f.kind === 'add').length,
@@ -244,7 +253,10 @@ export class Updater {
             signal: abort.signal,
             onCompare: () => progress('resolving', 'Comparing sources…'),
             countFiles: async (r) => {
-              const offer = await resolveOffer(r, pool, { probe: true, signal: abort.signal });
+              // The links stored here are bare, past filtering later: leave out what the update must
+              // not bring (new packs, files the user said no to) before they are counted and kept.
+              const skip = updateExclusions(r, this.controller.currentState.linkPrefs[String(key)]?.ignoredFiles ?? [], this.controller.installedFiles());
+              const offer = await resolveOffer(r, pool, { probe: true, except: skip, signal: abort.signal });
               offers.set(r.listing.url, offer);
               return offerFileCount(offer);
             },
@@ -268,11 +280,52 @@ export class Updater {
       const except = opts.onlyFile
         ? []
         : updateExclusions(remote, this.controller.currentState.linkPrefs[String(key)]?.ignoredFiles ?? [], this.controller.installedFiles());
-      const offer = opts.onlyFile
-        ? await resolveOffer(remote, pool, { probe: true, only: opts.onlyFile, signal: abort.signal })
-        : except.length
-          ? await resolveOffer(remote, pool, { probe: true, except, signal: abort.signal })
-          : offers.get(remote.listing.url);
+      // A LoversLab page lists each file with its own upload date: files of theirs posted no later than
+      // their copy aren't downloaded, and when that is all of them the update ends here, instead of a
+      // long download that only shows the files were the same.
+      let current: string[] = [];
+      let offer: Offer | undefined;
+      if (opts.onlyFile) {
+        offer = await resolveOffer(remote, pool, { probe: true, only: opts.onlyFile, signal: abort.signal });
+      } else if (remote.listing.source === 'loverslab' && !opts.ignoreDates) {
+        const { listed, button } = await loversLabFileList(remote, pool, abort.signal);
+        // No list read (one file, or a list its markup hid): the button it found is the download, without
+        // loading the page again. Should the button lead to a list, the download leaves `except` out.
+        if (!listed && button) offer = { button };
+        if (listed) {
+          current = currentByDate(listed, target.files, this.controller.installedFiles());
+          let wanted: string[];
+          try {
+            wanted = chooserDownloads(listed, undefined, [...except, ...current]);
+          } catch (err) {
+            if (!(err instanceof DownloadUnavailableError) || !current.length) throw err;
+            wanted = [];
+          }
+          if (!wanted.length) {
+            const plan: UpdatePlan = {
+              id: basename(workDir),
+              creatorKey: key,
+              name: target.name,
+              downloadUrl: remote.listing.url,
+              source: remote.listing.source,
+              downloads: [],
+              files: [],
+              possiblyObsolete: [],
+              skipped: [],
+              warnings: [],
+              upToDate: true,
+              byDate: true,
+            };
+            this.plans.set(plan.id, { plan, workDir });
+            progress('done', "Up to date by the page's dates");
+            return plan;
+          }
+          offer = { files: wanted };
+        }
+      }
+      // No probe for the exclusions: the download applies them itself wherever it meets a list, and
+      // probing a single-file entry's button would fetch the file twice.
+      offer ??= offers.get(remote.listing.url);
       const downloads = await downloadForRemote(
         remote,
         join(workDir, 'download'),
@@ -283,6 +336,7 @@ export class Updater {
         },
         abort.signal,
         offer,
+        except,
       );
       throwIfCancelled(abort.signal);
 
@@ -317,6 +371,12 @@ export class Updater {
       });
       plan.skipped.push(...notMods);
       await markUnchanged(plan, abort.signal);
+      if (current.length) {
+        // Left out of the download because theirs is as new: not "missing from this download", and
+        // with nothing of theirs changed, what's left only adds files.
+        plan.possiblyObsolete = plan.possiblyObsolete.filter((p) => !current.includes(basename(p).toLowerCase()));
+        if (plan.files.length && plan.files.every((f) => f.kind === 'add' || f.unchanged)) plan.onlyAdds = true;
+      }
       // Files left out before start unticked; not for Get it, where the one file was asked for.
       const skipped = opts.onlyFile ? [] : (this.controller.currentState.linkPrefs[String(key)]?.skippedFiles ?? []);
       const unticked = startUnticked(plan.files, skipped, this.controller.installedFiles());

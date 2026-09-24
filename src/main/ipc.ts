@@ -41,8 +41,11 @@ export function registerIpc(controller: AppController, updater: Updater, isTrust
     dismissVerification: (site) => controller.dismissVerification(site),
     signIn: (site) => controller.signIn(site),
     signOut: (site) => controller.signOut(site),
-    planUpdate: (key, listingUrl, fileName) =>
-      updater.plan(key, listingUrl, { onlyFile: typeof fileName === 'string' && fileName.length > 0 && fileName.length <= 255 ? fileName : undefined }),
+    planUpdate: (key, listingUrl, fileName, compareAnyway) =>
+      updater.plan(key, listingUrl, {
+        onlyFile: typeof fileName === 'string' && fileName.length > 0 && fileName.length <= 255 ? fileName : undefined,
+        ignoreDates: compareAnyway === true,
+      }),
     applyUpdate: (planId, choice) => updater.apply(planId, choice),
     undoInstall: (id) => updater.undo(id),
     undoBatch: (batchId) => updater.undoBatch(batchId),

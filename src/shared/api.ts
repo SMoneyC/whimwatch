@@ -139,6 +139,11 @@ export interface UpdatePlan {
   /** Every downloaded mod file matches what's installed: nothing to update. */
   upToDate: boolean;
   /**
+   * Up to date by the page's own dates, without downloading: every file of theirs on its list was
+   * posted no later than their copy. Said so, since nothing was compared byte for byte.
+   */
+  byDate?: boolean;
+  /**
    * The files of yours in the download are unchanged, and all it adds is files you don't have: most
    * likely a new pack put on the same page (a creator's Simlish edition, say), which the page's newer
    * date made look like an update. It can also be an update that only adds a file, so it's the
@@ -245,7 +250,7 @@ export interface WhimWatchApi {
   signOut(site: BrowserSite): Promise<AccountStatus>;
   /** Downloads and prepares an update; `listingUrl` picks the source (default: newest downloadable). */
   /** With `fileName`, only that file from the page's list of files (see RemoteInfo.newFiles). */
-  planUpdate(key: string, listingUrl?: string, fileName?: string): Promise<UpdatePlan>;
+  planUpdate(key: string, listingUrl?: string, fileName?: string, compareAnyway?: boolean): Promise<UpdatePlan>;
   applyUpdate(planId: string, choice: UpdateChoice): Promise<AppSnapshot>;
   undoInstall(id: string): Promise<AppSnapshot>;
   /** Undoes every install from one "Update all" (or automatic) run, newest first. */

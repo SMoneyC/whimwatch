@@ -74,12 +74,13 @@ export function dropInstalledFiles(remote: RemoteInfo, files: readonly LocalFile
 /**
  * The files an update from this page leaves out, by name: its new packs and the ones the user said
  * no to, which are offered on their own (Get it) rather than slipped in with an update. A file they
- * said no to and then installed anyway is theirs now, so its own updates aren't held back. Nothing
- * for a page without a file list: there is nothing to pick from, and asking would be a wasted
- * request to the download itself.
+ * said no to and then installed anyway is theirs now, so its own updates aren't held back. Given for
+ * any LoversLab page, not only one the last check saw a list on: results saved by an older version,
+ * or a page whose markup changed, still lead to a list once the download is followed, and it is
+ * there, wherever it is met, that these are left out. On a page with one file they change nothing.
  */
 export function updateExclusions(remote: RemoteInfo, ignored: readonly string[], installed: readonly LocalFile[]): string[] {
-  if (remote.listing.source !== 'loverslab' || !remote.chooserUrl) return [];
+  if (remote.listing.source !== 'loverslab') return [];
   const have = new Set(installed.map((f) => basename(f.path).toLowerCase()));
   return [...(remote.newFiles ?? []).map((f) => f.name), ...ignored.filter((name) => !have.has(name.toLowerCase()))];
 }
@@ -140,4 +141,27 @@ export function startUnticked(files: readonly { target: string; kind: string }[]
   if (!skipped.length) return [];
   const theirs = new Set(installed.map((f) => withoutVersion(basename(f.path))));
   return files.filter((f) => f.kind === 'add' && wasSkipped(basename(f.target), skipped) && !theirs.has(withoutVersion(basename(f.target)))).map((f) => f.target);
+}
+
+/**
+ * The files on a page's list the user already has, going by dates alone, so an update needn't
+ * download them to find that out: listed under the name of a file of theirs, and posted no later
+ * than their copy. No day's leeway, unlike page dates: a copy installed by hand usually carries the
+ * creator's older build date, so it is simply downloaded and compared, as before. A file with no
+ * date, or no copy of theirs, never counts. Lower-case names.
+ */
+export function currentByDate(listed: readonly ChooserFile[], own: readonly LocalFile[], elsewhere: readonly LocalFile[] = []): string[] {
+  const copies = new Map<string, number>();
+  const note = (f: LocalFile): void => {
+    const name = basename(f.path).toLowerCase();
+    copies.set(name, Math.max(copies.get(name) ?? 0, f.mtimeMs));
+  };
+  own.forEach(note);
+  // This creator's own copy decides. Others' files only count for a name this creator lacks (a file
+  // sorted under another author), so a generic name held elsewhere can't stand in for theirs.
+  const theirs = new Set(copies.keys());
+  elsewhere.filter((f) => !theirs.has(basename(f.path).toLowerCase())).forEach(note);
+  return listed
+    .filter((f) => f.name && f.updatedAt !== undefined && f.updatedAt <= (copies.get(f.name.toLowerCase()) ?? -Infinity))
+    .map((f) => f.name.toLowerCase());
 }

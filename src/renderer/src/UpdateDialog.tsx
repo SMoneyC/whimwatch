@@ -46,6 +46,8 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
   const [options] = useState(() => (app.snapshot ? downloadOptions(target.key, app.snapshot, target.listingUrl) : []));
   // Undefined lets the app pick (newest, then most files); the plan reports what it chose.
   const [sourceUrl, setSourceUrl] = useState<string | undefined>(target.listingUrl);
+  // Set by "Download and compare anyway", when the page's dates can't be trusted.
+  const [compareAnyway, setCompareAnyway] = useState(false);
   const progress = app.updates[target.key];
   const snapshot = app.snapshot;
   const creator = snapshot?.lastResult?.creators.find((c) => c.key === target.key);
@@ -63,7 +65,7 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
 
   useEffect(() => {
     let cancelled = false;
-    api.planUpdate(target.key, sourceUrl, target.fileName).then(
+    api.planUpdate(target.key, sourceUrl, target.fileName, compareAnyway).then(
       (p) => {
         if (cancelled) return;
         setPlan(p);
@@ -76,7 +78,7 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
     return () => {
       cancelled = true;
     };
-  }, [target.key, sourceUrl, target.fileName]);
+  }, [target.key, sourceUrl, target.fileName, compareAnyway]);
 
   // "Close the game to install": look again whenever the user comes back to the window, and every few seconds.
   useEffect(() => {
@@ -175,11 +177,11 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
   // A new file on a page of theirs has its own date; the page's is their pack's.
   const postedAt = target.fileName ? packPage?.newFiles?.find((f) => f.name === target.fileName)?.updatedAt : packPage?.updatedAt;
   const subtitle = newPack
-    ? `From ${target.name}${postedAt !== undefined ? ` · posted ${formatShortDate(postedAt)}` : ''}`
+    ? `From ${target.name}${postedAt !== undefined ? ` · Posted ${formatShortDate(postedAt)}` : ''}`
     : target.key !== CORE_KEY && creator?.remoteUpdatedAt !== undefined
       ? // Against the files from this pack where the page named them, not the creator's newest file:
       // "you have files from Sep 17" under a pack you last updated in 2024 helps nobody.
-      `Update posted ${timeAgo(creator.remoteUpdatedAt)} · you have files from ${formatShortDate(behindPage?.yoursAt ?? creator.localUpdatedAt)}`
+      `Update posted ${timeAgo(creator.remoteUpdatedAt)} · You have files from ${formatShortDate(behindPage?.yoursAt ?? creator.localUpdatedAt)}`
       : undefined;
 
   return (
@@ -357,8 +359,27 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
             after it — that's a guess from names, and the download is what settles it.
           </Banner>
         ) : (
-          <Banner tone="ok" title="Nothing to install — you already have this">
-            Turns out the creator's page date is different than yours, but the file itself is the same - Nothing to update after all! Mark this as seen and {target.name} will no longer prompt for updates until the next one is posted.
+          <Banner
+            tone="ok"
+            title="Nothing to install — you already have this"
+            actions={
+              // Only dates were compared: a Mods folder copied or synced can have reset them.
+              plan.byDate && (
+                <Button
+                  size="sm"
+                  icon={Download}
+                  onClick={() => {
+                    setPlan(undefined);
+                    setCompareAnyway(true);
+                  }}
+                >
+                  Download and compare anyway
+                </Button>
+              )
+            }
+          >
+            {plan.byDate ? "By the page's dates, you already have the latest files." : 'The page changed, but the file is the same as yours.'}{' '}
+            Mark it as seen and it won't come up again until something new is posted.
           </Banner>
         )
       )}

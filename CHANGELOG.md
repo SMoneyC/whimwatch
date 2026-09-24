@@ -14,6 +14,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - LoversLab pages are dated by their files, not by the page. Editing a page, or adding a new pack to it, no longer makes your pack on it look out of date. A newer version of your own file under a new name still counts as an update. For such pages WhimWatch reads the page's list of files on each check, one extra request.
 - A new pack added to a LoversLab page you follow is shown under "New on a page of theirs". "Get it" downloads only that file, "Not interested" hides it ("Show it again", in the creator's details, brings it back), and updating your pack from that page leaves it out.
 - Files you leave unticked in an update start unticked the next time an update brings them, with a note saying so. "Update all" leaves them out and says how many it left out. New files an update adds still start ticked.
+- Updating from a LoversLab page no longer downloads files you already have before being able to test if they are the same. WhimWatch reads the page's list of files first and only downloads the ones that are newer than yours. If none are, it says you're up to date right away, and "Download and compare anyway" is there if your file dates can't be trusted. Update all leaves it for you to decide.
 
 ### Fixed
 
