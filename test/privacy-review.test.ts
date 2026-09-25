@@ -20,7 +20,7 @@ import {
 } from '../src/main/privacy.js';
 import { allowHiddenRequest, SITE_DOMAINS } from '../src/main/request-filter.js';
 import { SiteSessionMode } from '../src/main/session-mode.js';
-import { isRejectionTitle, isSignInRejection, PASSWORD_HELP, signInProvider } from '../src/main/sign-in-provider.js';
+import { afterNavigation, isSignInRejection, PASSWORD_HELP, signInProvider } from '../src/main/sign-in-provider.js';
 import { t } from '../src/shared/i18n/index.js';
 import { gameWarnings } from '../src/shared/game.js';
 import { privacyLevel, privacyLevelPatch } from '../src/shared/privacy.js';
@@ -195,11 +195,18 @@ describe('signing in through another service', () => {
     expect(isSignInRejection('not a url')).toBe(false);
   });
 
-  it('recognizes the same page by its heading, for addresses that say nothing', () => {
-    expect(isRejectionTitle("Couldn't sign you in")).toBe(true);
-    expect(isRejectionTitle('Couldn’t sign you in')).toBe(true);
-    expect(isRejectionTitle('Sign in - Google Accounts')).toBe(false);
-    expect(isRejectionTitle('Log in or sign up | Patreon')).toBe(false);
+  it('explains a sign-in window once per trip to Google, by address alone', () => {
+    const google = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=x';
+    // Reaching Google is the dead end, once: a second load or in-page change there says nothing new.
+    expect(afterNavigation(google, false)).toEqual({ forget: false, explain: true });
+    expect(afterNavigation(google, true)).toEqual({ forget: false, explain: false });
+    expect(afterNavigation('https://accounts.google.com/v3/signin/rejected?rejectReason=DISALLOWED_USERAGENT', true).explain).toBe(false);
+    // Back on the site, it's forgotten, so trying again is explained again.
+    expect(afterNavigation('https://www.patreon.com/login', true)).toEqual({ forget: true, explain: false });
+    // A refusal handed back to the site is explained, even straight after a trip that was.
+    expect(afterNavigation('https://www.patreon.com/auth/google#error=disallowed_useragent', true)).toEqual({ forget: true, explain: true });
+    // Other sign-in services aren't Google's dead end.
+    expect(afterNavigation('https://appleid.apple.com/auth/authorize', false)).toEqual({ forget: false, explain: false });
   });
 
   it('points at the site itself, not at the service that refused', () => {

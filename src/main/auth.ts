@@ -3,7 +3,7 @@ import type { AccountStatus } from '../shared/api.js';
 import { t } from '../shared/i18n/index.js';
 import { type BrowserPool, type BrowserSite, browserUserAgent, SITES, siteSession, useSiteSession } from './browser.js';
 import { openUrl } from './open.js';
-import { isRejectionTitle, isSignInRejection, PASSWORD_HELP, signInProvider } from './sign-in-provider.js';
+import { afterNavigation, PASSWORD_HELP } from './sign-in-provider.js';
 
 export async function accountStatus(site: BrowserSite): Promise<AccountStatus> {
   const { origin, sessionCookie, label } = SITES[site];
@@ -90,12 +90,11 @@ class SignInGuide {
       this.watch(child, child.webContents);
     });
     const onNavigate = (url: string): void => {
-      // This window is back on the site's own pages: a later attempt in it is worth explaining again.
-      if (!signInProvider(url)) this.explained.delete(wc);
-      // A window of ours reaching Google's sign-in is already the dead end: it is
-      // only ever reached by "Continue with Google", and that can't finish inside
-      // an app. Waiting for the refusal page would miss the times it never loads.
-      if (signInProvider(url) === 'Google' || isSignInRejection(url)) this.explain(win, wc);
+      // Explained on reaching Google's sign-in rather than its refusal page: waiting for the
+      // refusal would miss the times it never loads.
+      const { forget, explain } = afterNavigation(url, this.explained.has(wc));
+      if (forget) this.explained.delete(wc);
+      if (explain) this.explain(win, wc);
     };
     wc.on('did-navigate', (_event, url) => onNavigate(url));
     // Unlike did-navigate, this one also fires for frames inside the page — and the
@@ -103,15 +102,14 @@ class SignInGuide {
     wc.on('did-redirect-navigation', (details) => {
       if (details.isMainFrame) onNavigate(details.url);
     });
+    // Addresses a navigation event can miss: a pop-up's first page, which can load before this
+    // watch is attached, and pages that change their address without loading. Read by address, as
+    // above, never by what the page says: Google words its refusal in the user's own language.
+    wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+      if (isMainFrame) onNavigate(url);
+    });
     wc.on('did-finish-load', () => {
-      if (wc.isDestroyed() || this.explained.has(wc) || signInProvider(wc.getURL()) !== 'Google') return;
-      // The page's title, never what the user typed on it.
-      void wc
-        .executeJavaScript('document.title', true)
-        .then((title: unknown) => {
-          if (typeof title === 'string' && isRejectionTitle(title)) this.explain(win, wc);
-        })
-        .catch(() => undefined);
+      if (!wc.isDestroyed()) onNavigate(wc.getURL());
     });
   }
 

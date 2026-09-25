@@ -1,0 +1,1 @@
+- The explanation of why "Continue with Google" can't work inside WhimWatch now appears whatever language Google's page is in, not only English.

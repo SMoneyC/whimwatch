@@ -43,9 +43,16 @@ export function isSignInRejection(url: string): boolean {
   return /\/signin\/rejected/i.test(parsed.pathname) || carriers.some((params) => params.has('rejectReason'));
 }
 
-/** The heading that page carries, for when the address alone doesn't give it away. */
-export function isRejectionTitle(title: string): boolean {
-  return /could\s?n[’']?t sign you in|can[’']?t sign you in/i.test(title);
+/**
+ * What a sign-in window reaching `url` means, given whether that window was already explained to.
+ * Back on the site's own pages, a later attempt in it is worth explaining again (`forget`). Reaching
+ * Google's sign-in is already the dead end — it's only ever reached by "Continue with Google", which
+ * can't finish inside an app — as is a refusal handed back to the site; either is explained once.
+ */
+export function afterNavigation(url: string, explained: boolean): { forget: boolean; explain: boolean } {
+  const forget = signInProvider(url) === undefined;
+  const deadEnd = signInProvider(url) === 'Google' || isSignInRejection(url);
+  return { forget, explain: deadEnd && (forget || !explained) };
 }
 
 /**
