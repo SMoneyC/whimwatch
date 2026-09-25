@@ -12,6 +12,8 @@ import { currentByDate, startUnticked, updateExclusions } from '../core/pack-fil
 import { isGameRunning } from '../core/process.js';
 import { chooseRemote } from '../core/source-choice.js';
 import type { AppSnapshot, BatchState, StorageInfo, UpdateChoice, UpdatePlan, UpdateStage } from '../shared/api.js';
+import { numberFormat } from '../shared/i18n/format.js';
+import { englishMessage, t, translatedError } from '../shared/i18n/index.js';
 import { SOURCE_LABEL } from '../shared/labels.js';
 import type { CheckResult, LocalFile, RemoteInfo } from '../shared/types.js';
 import { laterSources, laterSourcesText, updatableRemotes, updateSources } from '../shared/updatable.js';
@@ -74,7 +76,7 @@ export class Updater {
 
   async apply(planId: unknown, choice: unknown, meta: InstallMeta = {}): Promise<AppSnapshot> {
     const entry = typeof planId === 'string' ? this.plans.get(planId) : undefined;
-    if (!entry) throw new Error('This update is no longer ready. Please try again.');
+    if (!entry) throw translatedError((m) => m.updater.notReady);
     const c = (choice ?? {}) as Partial<Record<keyof UpdateChoice, unknown>>;
     const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string') : []);
     return this.exclusive(() => this.install(entry, { remove: strings(c.remove), skip: strings(c.skip) }, meta));
@@ -90,7 +92,7 @@ export class Updater {
   async undoBatch(batchId: unknown): Promise<AppSnapshot> {
     if (typeof batchId !== 'string') throw new Error('Unknown update');
     const records = this.controller.currentState.installs.filter((i) => i.batchId === batchId && hasLiveBackup(i)).reverse();
-    if (!records.length) throw new Error('Nothing from that run can be undone any more.');
+    if (!records.length) throw translatedError((m) => m.updater.nothingToUndo);
     return this.exclusive(async () => {
       let snapshot: AppSnapshot | undefined;
       for (const record of records) snapshot = await this.controller.replaceInstall(await undoInstall(record));
@@ -103,7 +105,7 @@ export class Updater {
    * (every downloaded file, nothing removed). Keeps going when one fails.
    */
   async updateAll(keys: unknown, opts: PlanOptions & { skipIfWarnings?: boolean; automatic?: boolean } = {}): Promise<BatchState | undefined> {
-    if (this.batchRunning) throw new Error('Already updating.');
+    if (this.batchRunning) throw translatedError((m) => m.updater.alreadyUpdating);
     const requested = Array.isArray(keys) ? keys.filter((k): k is string => typeof k === 'string') : [];
     const items = requested.flatMap((key) => {
       const target = this.target(key);
@@ -122,24 +124,21 @@ export class Updater {
         async (key) => {
           try {
             const plan = await this.plan(key, undefined, opts);
-            if (plan.warnings.some((w) => w.startsWith('The Sims 4 is running'))) {
-              throw new StopBatchError('Close The Sims 4 first, then run Update all again.');
-            }
+            const m = t().updater;
+            if (plan.gameRunning) throw translatedError((m) => m.updater.closeGameFirst, StopBatchError);
             if (plan.byDate) {
               // Only the page's dates say so, with nothing downloaded or compared: not enough to mark it
               // seen on the user's behalf, or to record that the files matched. The Update window asks.
               await this.discardPlans(key);
-              return `By the page's dates you already have these files from ${SOURCE_LABEL[plan.source]}. Open its Update window to mark it as seen, or to download and compare anyway.`;
+              return m.batchByDate(SOURCE_LABEL[plan.source]);
             }
             if (plan.upToDate) {
               await this.discardPlans(key);
               await this.controller.markSeen(key, plan.downloadUrl, { automatic: true });
               const label = SOURCE_LABEL[plan.source];
-              if (this.controller.statusOf(key) !== 'update-available') return `Already up to date: your files match ${label}`;
+              if (this.controller.statusOf(key) !== 'update-available') return m.batchUpToDate(label);
               const later = laterSources(this.target(key)?.remotes ?? [], plan.downloadUrl);
-              return later.length
-                ? `Your files match ${label}. ${laterSourcesText(later, undefined, plan.source)}, so open ${later.length === 1 ? 'it' : 'those'} to see what's new.`
-                : `Your files match ${label}, but another source looks newer. Open the creator's pages to see what's new.`;
+              return later.length ? m.batchLater(label, laterSourcesText(later, undefined, plan.source), later.length) : m.batchNewerElsewhere(label);
             }
             if (plan.onlyAdds) {
               // Not installed on the user's behalf, since it's usually a new pack rather than an update
@@ -147,17 +146,17 @@ export class Updater {
               // the new files with no way back to them. The row stays, and its Update window asks.
               await this.discardPlans(key);
               const added = plan.files.filter((f) => f.kind === 'add').length;
-              return `Your files match ${SOURCE_LABEL[plan.source]}. It also has ${added === 1 ? 'a file' : `${added} files`} you don't have, probably a new pack. Open its Update window to install ${added === 1 ? 'it' : 'them'} or mark it as seen.`;
+              return m.batchOnlyAdds(SOURCE_LABEL[plan.source], added);
             }
-            if (!plan.files.length) throw new Error("The download doesn't contain any .package or .ts4script files.");
-            if (opts.skipIfWarnings && plan.warnings.length) throw new Error(`Needs a look: ${plan.warnings[0]}`);
+            if (!plan.files.length) throw translatedError((m) => m.installer.noModFiles);
+            if (opts.skipIfWarnings && plan.warnings.length) throw translatedError((m) => m.updater.needsALook(plan.warnings[0]!));
             // Nobody is there to tick them: files left out before stay out.
             await this.apply(plan.id, { remove: [], skip: plan.startUnticked ?? [] }, { batchId, automatic: opts.automatic });
             const changed = plan.files.filter((f) => !f.unchanged && !plan.startUnticked?.includes(f.target));
             return {
               // Left out without anyone asking, so said out loud: the file is still one tick away.
-              message: `Installed ${changed.length} file${changed.length === 1 ? '' : 's'} from ${SOURCE_LABEL[plan.source]}${
-                plan.startUnticked?.length ? ` · Left out ${plan.startUnticked.length} you skipped before` : ''
+              message: `${m.batchInstalled(changed.length, SOURCE_LABEL[plan.source])}${
+                plan.startUnticked?.length ? ` · ${m.batchLeftOut(plan.startUnticked.length)}` : ''
               }${plan.warnings.length ? ` (${plan.warnings[0]})` : ''}`,
               replaced: changed.filter((f) => f.kind === 'replace').length,
               added: changed.filter((f) => f.kind === 'add').length,
@@ -212,7 +211,7 @@ export class Updater {
 
   /** Leftover downloads, the log, and everything the LoversLab/Patreon browsers stored except sign-ins. */
   async clearCaches(): Promise<StorageInfo> {
-    if (this.isBusy()) throw new Error('Wait for the current update to finish first.');
+    if (this.isBusy()) throw translatedError((m) => m.main.waitForUpdate);
     this.plans.clear();
     clearLog();
     await removeDir(this.tempRoot);
@@ -226,7 +225,7 @@ export class Updater {
     const keys = result.creators.filter((c) => c.status === 'update-available').map((c) => c.key);
     if (result.core.status === 'update-available') keys.unshift(CORE_KEY);
     const batch = await this.updateAll(keys, { publicOnly: true, skipIfWarnings: true, automatic: true }).catch((err: Error) => {
-      console.warn('Automatic updates failed:', err.message);
+      console.warn('Automatic updates failed:', englishMessage(err));
       return undefined;
     });
     const installed = batch?.items.filter((i) => i.state === 'done' && i.replaced !== undefined).length ?? 0;
@@ -251,7 +250,7 @@ export class Updater {
             publicOnly: opts.publicOnly,
             listingUrl,
             signal: abort.signal,
-            onCompare: () => progress('resolving', 'Comparing sources…'),
+            onCompare: () => progress('resolving', t().updater.comparing),
             countFiles: async (r) => {
               // The links stored here are bare, past filtering later: leave out what the update must
               // not bring (new packs, files the user said no to) before they are counted and kept.
@@ -262,18 +261,12 @@ export class Updater {
             },
           })));
       if (!target || !remote) {
-        throw new Error(
-          listingUrl
-            ? "That source can't be downloaded from right now."
-            : opts.publicOnly
-              ? 'No source that works without signing in.'
-              : 'No downloadable source for this update. Sign in to LoversLab or Patreon, or download it yourself.',
-        );
+        throw translatedError((m) => (listingUrl ? m.updater.cantDownloadSource : opts.publicOnly ? m.updater.noPublicSource : m.updater.noSource));
       }
       await this.discardPlans(key);
       const label = SOURCE_LABEL[remote.listing.source];
-      progress('resolving', `Finding the download on ${label}…`);
-      if (opts.onlyFile && remote.listing.source !== 'loverslab') throw new Error('Only LoversLab pages offer single files.');
+      progress('resolving', t().updater.finding(label));
+      if (opts.onlyFile && remote.listing.source !== 'loverslab') throw translatedError((m) => m.updater.onlyLoversLabFiles);
       // Installed files are looked for among everything scanned, not one creator's: a file got from
       // their page can be filed under another author (as a pack's Simlish edition was), or under
       // none at all (a script, or a package that names no author).
@@ -317,7 +310,7 @@ export class Updater {
               byDate: true,
             };
             this.plans.set(plan.id, { plan, workDir });
-            progress('done', "Up to date by the page's dates");
+            progress('done', t().updater.upToDateByDate);
             return plan;
           }
           offer = { files: wanted };
@@ -331,8 +324,11 @@ export class Updater {
         join(workDir, 'download'),
         { fetcher: pool.fetcher(), pool },
         (received, total, file) => {
-          const which = file.count > 1 ? ` file ${file.index + 1} of ${file.count}:` : '';
-          progress('downloading', `Downloading from ${label}${which} ${bytes(received)}${total ? ` of ${bytes(total)}` : ''}`, received, total);
+          const m = t().updater;
+          const got = bytes(received);
+          const size = total ? bytes(total) : undefined;
+          const message = file.count > 1 ? m.downloadingFile(label, file.index + 1, file.count, got, size) : m.downloading(label, got, size);
+          progress('downloading', message, received, total);
         },
         abort.signal,
         offer,
@@ -340,7 +336,7 @@ export class Updater {
       );
       throwIfCancelled(abort.signal);
 
-      progress('extracting', 'Unpacking…');
+      progress('extracting', t().updater.unpacking);
       const extractedDir = join(workDir, 'files');
       const extractedFiles: string[] = [];
       const notMods: string[] = [];
@@ -356,7 +352,7 @@ export class Updater {
       }
       throwIfCancelled(abort.signal);
 
-      progress('extracting', 'Comparing with your installed files…');
+      progress('extracting', t().updater.comparingInstalled);
       const plan = planInstall({
         id: basename(workDir),
         creatorKey: key,
@@ -381,13 +377,13 @@ export class Updater {
       const skipped = opts.onlyFile ? [] : (this.controller.currentState.linkPrefs[String(key)]?.skippedFiles ?? []);
       const unticked = startUnticked(plan.files, skipped, this.controller.installedFiles());
       if (unticked.length) plan.startUnticked = unticked;
-      if (await isGameRunning()) plan.warnings.unshift('The Sims 4 is running. Close it before installing.');
+      if (await isGameRunning()) plan.gameRunning = true;
       this.plans.set(plan.id, { plan, workDir });
-      progress('done', plan.upToDate ? `Already up to date with ${label}` : `Ready to install from ${label}`);
+      progress('done', plan.upToDate ? t().updater.upToDateWith(label) : t().updater.readyFrom(label));
       return plan;
     } catch (err) {
       const cancelled = abort.signal.aborted;
-      progress('error', cancelled ? 'Cancelled' : (err as Error).message);
+      progress('error', cancelled ? t().updater.cancelled : (err as Error).message);
       await rm(workDir, { recursive: true, force: true });
       throw cancelled ? new CancelledError() : err;
     } finally {
@@ -398,7 +394,7 @@ export class Updater {
   private async install(entry: { plan: UpdatePlan; workDir: string }, choice: UpdateChoice, meta: InstallMeta): Promise<AppSnapshot> {
     const { plan, workDir } = entry;
     const progress = this.progressFor(plan.creatorKey);
-    progress('installing', 'Installing…');
+    progress('installing', t().updater.installingEllipsis);
     try {
       const record = await applyInstall({
         plan,
@@ -418,7 +414,7 @@ export class Updater {
         added.filter((f) => !choice.skip.includes(f.target)).map((f) => basename(f.target)),
       );
       const newPack = this.isNewPackPage(plan);
-      progress('done', `${newPack ? 'Added' : 'Updated'} ${plan.name}`);
+      progress('done', newPack ? t().updater.added(plan.name) : t().updater.updated(plan.name));
       return await this.controller.recordInstall({
         ...record,
         source: plan.source,
@@ -491,7 +487,7 @@ export class Updater {
   }
 
   private async exclusive<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.busy) throw new Error('Another update is in progress.');
+    if (this.busy) throw translatedError((m) => m.updater.anotherUpdate);
     this.busy = true;
     try {
       return await fn();
@@ -502,6 +498,7 @@ export class Updater {
 }
 
 function bytes(n: number): string {
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${(n / 1024 / 1024).toFixed(n < 100 * 1024 * 1024 ? 1 : 0)} MB`;
+  if (n < 1024 * 1024) return `${numberFormat({ maximumFractionDigits: 0 }).format(n / 1024)} KB`;
+  const digits = n < 100 * 1024 * 1024 ? 1 : 0;
+  return `${numberFormat({ minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n / 1024 / 1024)} MB`;
 }

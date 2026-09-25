@@ -1,4 +1,5 @@
 import type { AppSnapshot, BrowserSite } from '../../shared/api';
+import { t } from '../../shared/i18n';
 import type { CoreResult, CreatorResult, RemoteInfo, SourceId } from '../../shared/types';
 import { newPacks, ownedRemotes, updatableRemote, updatableRemotes, updateSources } from '../../shared/updatable';
 import { SOURCE_LABEL } from './format';
@@ -9,7 +10,7 @@ export const CORE_KEY = '__wickedwhims__';
  * Why installing is off while a check runs: an install then would be undone by the check's result,
  * built from the files as they were before it. A greyed-out button with no reason reads as broken.
  */
-export const AFTER_CHECK = 'Available when the check finishes';
+export const afterCheck = (): string => t().eligibility.afterCheck;
 
 export interface Candidate {
   key: string;
@@ -130,10 +131,11 @@ export function coreUpdatable(core: CoreResult): boolean {
 function blocker(c: CreatorResult, signedIn: SignedIn): { reason: string; signIn?: BrowserSite; url?: string } {
   const ok = updateSources(c.remotes, c.localUpdatedAt, c.dismissedAt).filter((r) => r.status === 'ok');
   const newest = [...ok].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0];
-  if (ok.some((r) => r.listing.source === 'loverslab') && !signedIn('loverslab')) return { reason: 'Sign in to LoversLab', signIn: 'loverslab' };
-  if (ok.some((r) => r.listing.source === 'patreon') && !signedIn('patreon')) return { reason: 'Sign in to Patreon', signIn: 'patreon' };
-  if (ok.some((r) => r.listing.source === 'patreon' && r.locked)) return { reason: 'The Patreon post is for patrons only', url: newest?.listing.url };
-  return { reason: 'No download link found', url: newest?.listing.url };
+  const m = t();
+  if (ok.some((r) => r.listing.source === 'loverslab') && !signedIn('loverslab')) return { reason: m.common.signInTo('LoversLab'), signIn: 'loverslab' };
+  if (ok.some((r) => r.listing.source === 'patreon') && !signedIn('patreon')) return { reason: m.common.signInTo('Patreon'), signIn: 'patreon' };
+  if (ok.some((r) => r.listing.source === 'patreon' && r.locked)) return { reason: m.eligibility.patronsOnly, url: newest?.listing.url };
+  return { reason: m.eligibility.noDownloadLink, url: newest?.listing.url };
 }
 
 /** Splits available updates into ones "Update all" can install now and ones it can't (with why). */
@@ -159,14 +161,6 @@ export function updateCandidates(core: CoreResult | undefined, creators: Creator
 /** What a row shows: one status, never two markers for the same thing. */
 export type RowStatus = 'update' | 'current' | 'verify' | 'missing' | 'failed' | 'off';
 
-export const ROW_STATUS_LABEL: Record<RowStatus, string> = {
-  update: 'Update ready',
-  current: 'Up to date',
-  verify: 'Needs a check',
-  missing: 'No page found',
-  failed: "Couldn't check",
-  off: 'Not checked',
-};
 
 export function rowStatus(c: CreatorResult): RowStatus {
   switch (c.status) {
@@ -183,10 +177,9 @@ export function rowStatus(c: CreatorResult): RowStatus {
   }
 }
 
-/** "Patreon", "LoversLab and Patreon" */
-export function siteList(sites: SourceId[]): string {
-  const labels = sites.map((s) => SOURCE_LABEL[s]);
-  return labels.length > 1 ? `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}` : (labels[0] ?? '');
+/** The sites' names, for a message to list ("LoversLab and Patreon"). */
+export function siteNames(sites: SourceId[]): string[] {
+  return sites.map((s) => SOURCE_LABEL[s]);
 }
 
 export type RowAction =
@@ -215,30 +208,28 @@ export function rowAction(c: CreatorResult, snapshot: AppSnapshot): RowAction {
 }
 
 /** "New release 3 days ago", "Released 2 months ago"… (the middle column of a row). */
-export function rowSummary(c: CreatorResult, timeAgo: (t: number) => string): string {
+export function rowSummary(c: CreatorResult, timeAgo: (at: number) => string): string {
+  const m = t().summary;
   switch (rowStatus(c)) {
     case 'update':
       // Not "New release": the page that needs updating is often an older pack of theirs you simply
       // never caught up with, and calling a 2024 release "new" reads as a bug.
-      return c.remoteUpdatedAt !== undefined ? `Update posted ${timeAgo(c.remoteUpdatedAt)}` : 'Update available';
+      return c.remoteUpdatedAt !== undefined ? m.updatePosted(timeAgo(c.remoteUpdatedAt)) : m.updateAvailable;
     case 'current':
-      if (c.dismissedAt !== undefined && c.remoteUpdatedAt !== undefined && c.remoteUpdatedAt > c.localUpdatedAt + 86_400_000) return 'Marked as seen';
-      return c.remoteUpdatedAt !== undefined ? `Released ${timeAgo(c.remoteUpdatedAt)}` : 'Up to date';
+      if (c.dismissedAt !== undefined && c.remoteUpdatedAt !== undefined && c.remoteUpdatedAt > c.localUpdatedAt + 86_400_000) return m.markedAsSeen;
+      return c.remoteUpdatedAt !== undefined ? m.released(timeAgo(c.remoteUpdatedAt)) : m.upToDate;
     case 'verify': {
       const site = c.remotes.find((r) => r.status === 'needs-verification')?.listing.source;
-      return `${site ? SOURCE_LABEL[site] : 'A site'} wants a human check`;
+      return m.wantsHumanCheck(site && SOURCE_LABEL[site]);
     }
     case 'missing':
-      return 'No download page found';
+      return m.noDownloadPage;
     case 'failed': {
       const site = c.remotes.find((r) => r.status === 'error')?.listing.source;
-      return `Couldn't reach ${site ? SOURCE_LABEL[site] : 'the site'}`;
+      return m.couldntReach(site && SOURCE_LABEL[site]);
     }
-    case 'off': {
-      if (c.allSitesOff) return 'Every site is turned off';
-      const sites = c.mutedSources ?? [];
-      return `${siteList(sites)} ${sites.length === 1 ? 'is' : 'are'} turned off`;
-    }
+    case 'off':
+      return c.allSitesOff ? m.everySiteOff : m.sitesOff(siteNames(c.mutedSources ?? []));
   }
 }
 

@@ -4,6 +4,7 @@ import { copyFile, mkdir, rename, rm, stat, unlink, utimes } from 'node:fs/promi
 import { basename, dirname, join, relative, sep } from 'node:path';
 import type { PlannedFile, UpdatePlan } from '../shared/api.js';
 import type { InstallOperation, InstallRecord, LocalFile } from '../shared/types.js';
+import { t, translatedError } from '../shared/i18n/index.js';
 import { MOD_FILE } from './archive.js';
 import { throwIfCancelled } from './fetcher.js';
 import { isGameRunning as defaultIsGameRunning } from './process.js';
@@ -39,7 +40,7 @@ export function planInstall(input: PlanInput): UpdatePlan {
     const key = name.toLowerCase();
     const first = seen.get(key);
     if (first) {
-      warnings.push(`The download has more than one ${name}; only ${first} will be installed.`);
+      warnings.push(t().installer.duplicate(name, first));
       continue;
     }
     seen.set(key, rel);
@@ -52,11 +53,11 @@ export function planInstall(input: PlanInput): UpdatePlan {
     }
     const dir = /\.ts4script$/i.test(name) ? scriptDir(homeDir, input.modsRoots) : homeDir;
     const target = join(dir, name);
-    if (existsSync(target)) warnings.push(`${name} already exists in your Mods folder and will be replaced.`);
+    if (existsSync(target)) warnings.push(t().installer.exists(name));
     files.push({ source, target, kind: existsSync(target) ? 'replace' : 'add' });
   }
 
-  if (!files.length) warnings.push("The download doesn't contain any .package or .ts4script files.");
+  if (!files.length) warnings.push(t().installer.noModFiles);
   const incoming = new Set(files.map((f) => basename(f.target).toLowerCase()));
   return {
     id: input.id,
@@ -112,7 +113,7 @@ function sha256(path: string): Promise<string> {
 function defaultTargetDir(installed: LocalFile[], roots: string[]): string {
   const newest = [...installed].sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
   if (newest) return dirname(newest.path);
-  if (!roots[0]) throw new Error('No Mods folder configured');
+  if (!roots[0]) throw translatedError((m) => m.installer.noModsFolder);
   return roots[0];
 }
 
@@ -145,9 +146,9 @@ export async function applyInstall(opts: ApplyOptions): Promise<InstallRecord> {
   const skip = new Set(opts.skip ?? []);
   // Identical files are left alone: no copy, no backup.
   const files = plan.files.filter((f) => !skip.has(f.target) && !f.unchanged);
-  if (!files.length && !opts.remove.length) throw new Error('Nothing was selected to install.');
+  if (!files.length && !opts.remove.length) throw translatedError((m) => m.installer.nothingSelected);
   if (await (opts.isGameRunning ?? defaultIsGameRunning)()) {
-    throw new Error('Close The Sims 4 before updating mods.');
+    throw translatedError((m) => m.installer.closeGameUpdate);
   }
   for (const f of files) assertInside(f.target, modsRoots);
   for (const path of opts.remove) {
@@ -195,12 +196,12 @@ export async function undoInstall(
   opts: { now?: () => number; isGameRunning?: () => Promise<boolean> } = {},
 ): Promise<InstallRecord> {
   if (record.undoneAt) return record;
-  if (record.backupDeletedAt) throw new Error("This update's backup was deleted, so it can't be undone.");
+  if (record.backupDeletedAt) throw translatedError((m) => m.installer.backupDeleted);
   if (await (opts.isGameRunning ?? defaultIsGameRunning)()) {
-    throw new Error('Close The Sims 4 before undoing an update.');
+    throw translatedError((m) => m.installer.closeGameUndo);
   }
   for (const op of record.operations) {
-    if (op.backup && !existsSync(op.backup)) throw new Error(`The backup of ${basename(op.target)} is missing, so this update can't be undone.`);
+    if (op.backup && !existsSync(op.backup)) throw translatedError((m) => m.installer.backupMissing(basename(op.target)));
   }
   await revert(record.operations);
   await rm(record.backupDir, { recursive: true, force: true });

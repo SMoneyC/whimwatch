@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n';
 import { needsCheckAfterUnmute } from '../../shared/muted';
 import type { UpdateSite } from '../../shared/types';
 import { SOURCE_LABEL } from './format';
@@ -22,8 +23,8 @@ export function useSiteToggle(app: AppModel): (site: UpdateSite, on: boolean, cr
     if (!done) return false;
     if (needsCheck) {
       toast({
-        text: `${SOURCE_LABEL[site]} is checked again from the next check`,
-        action: snapshot.running ? undefined : { label: 'Check now', run: () => void app.run(() => api.startCheck()) },
+        text: t().sites.checkedAgainNext(SOURCE_LABEL[site]),
+        action: snapshot.running ? undefined : { label: t().common.checkNow, run: () => void app.run(() => api.startCheck()) },
       });
     }
     return true;

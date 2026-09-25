@@ -1,4 +1,5 @@
 import { BrowserUnavailableError, isChallengePage, VerificationRequiredError } from '../fetcher.js';
+import { problemFields } from '../../shared/problems.js';
 import type { SourceChecker } from './types.js';
 import { parseDate, patreonVanity } from './urls.js';
 
@@ -56,21 +57,21 @@ export function pickReleasePost(posts: PatreonPost[]): PatreonPost | undefined {
 export const checkPatreon: SourceChecker = async (listing, fetcher) => {
   if (!fetcher.browserGet || !fetcher.browserFetch) throw new BrowserUnavailableError('Patreon');
   const vanity = patreonVanity(listing.url);
-  if (!vanity) return { status: 'error', error: 'Not a creator page' };
+  if (!vanity) return { status: 'error', ...problemFields({ code: 'not-creator-page' }) };
   const pageUrl = `https://www.patreon.com/${vanity}`;
   const page = await fetcher.browserGet(pageUrl);
   if (isChallengePage(page.body)) throw new VerificationRequiredError('Patreon');
-  if (page.status === 404) return { status: 'not-found', error: 'Creator not found' };
+  if (page.status === 404) return { status: 'not-found', ...problemFields({ code: 'creator-not-found' }) };
   const campaignId = parseCampaignId(page.body);
   // Deleted or renamed creator pages render a generic page without a campaign.
-  if (!campaignId) return { status: 'not-found', error: 'No Patreon page for this name' };
+  if (!campaignId) return { status: 'not-found', ...problemFields({ code: 'no-patreon-page' }) };
 
   const api = await fetcher.browserFetch(pageUrl, postsApiUrl(campaignId));
-  if (api.status !== 200) return { status: 'error', error: `Posts API HTTP ${api.status}` };
+  if (api.status !== 200) return { status: 'error', ...problemFields({ code: 'posts-api', status: api.status }) };
   const posts = parsePosts(api.body);
   const post = pickReleasePost(posts);
   if (!post) {
-    return { status: 'not-found', error: posts.length ? 'No release posts among the latest posts' : 'No posts on this Patreon page' };
+    return { status: 'not-found', ...problemFields({ code: posts.length ? 'no-release-posts' : 'no-posts' }) };
   }
   return {
     updatedAt: post.publishedAt,

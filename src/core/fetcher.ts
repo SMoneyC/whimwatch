@@ -46,6 +46,13 @@ export class VerificationRequiredError extends Error {
   }
 }
 
+/** A page didn't finish loading in time. The message keeps its address for the log (redacted there). */
+export class LoadTimeoutError extends Error {
+  constructor(url: string) {
+    super(`Timed out loading ${url}`);
+  }
+}
+
 export class BrowserUnavailableError extends Error {
   constructor(readonly site: string) {
     super(`${site} can only be checked from the desktop app`);

@@ -22,6 +22,9 @@ export type IssueForm = 'bug_report' | 'site_changed' | 'creator_link' | 'featur
 export const newIssueUrl = (form: IssueForm, fields: Record<string, string> = {}): string =>
   `${repoUrl()}/issues/new?${new URLSearchParams({ template: `${form}.yml`, ...fields })}`;
 
+/** How to translate WhimWatch, or improve a translation (CONTRIBUTING.md). */
+export const translateUrl = (): string => `${repoUrl()}/blob/main/CONTRIBUTING.md#translating-whimwatch`;
+
 /** Private vulnerability reports (SECURITY.md). */
 export const securityReportUrl = (): string => `${repoUrl()}/security/advisories/new`;
 

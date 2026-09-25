@@ -1,6 +1,7 @@
 import { ArrowLeft, Check, CheckCircle2, CircleDashed, FolderOpen, FolderPlus, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import type { FolderPreview } from '../../shared/api';
+import { t } from '../../shared/i18n';
 import { privacyLevelPatch } from '../../shared/privacy';
 import { formatCount } from './format';
 import { api, type AppModel } from './useApp';
@@ -61,6 +62,7 @@ export function Setup({ app }: { app: AppModel }) {
 
   const stats = preview?.dirs === selectedKey ? preview.value : undefined;
   const scanning = selected.length > 0 && preview?.dirs !== selectedKey;
+  const m = t().setup;
 
   return (
     <div className="setup">
@@ -69,10 +71,10 @@ export function Setup({ app }: { app: AppModel }) {
         <span>WhimWatch</span>
       </header>
       <main className="setup-main" id="main">
-        <ol className="stepper" aria-label="Setup steps">
-          <Step n={1} label="Your mods" state={step === 1 ? 'current' : 'done'} />
-          <Step n={2} label="Privacy" state={step === 2 ? 'current' : 'todo'} />
-          <Step n={3} label="First check" state="todo" />
+        <ol className="stepper" aria-label={m.steps}>
+          <Step n={1} label={m.stepMods} state={step === 1 ? 'current' : 'done'} />
+          <Step n={2} label={m.stepPrivacy} state={step === 2 ? 'current' : 'todo'} />
+          <Step n={3} label={m.stepCheck} state="todo" />
         </ol>
         {app.error && (
           <Banner tone="error" onClose={() => app.setError(undefined)}>
@@ -82,13 +84,13 @@ export function Setup({ app }: { app: AppModel }) {
 
         {step === 1 ? (
           <>
-            <h1>Let’s find your mods</h1>
-            <p className="lead muted">WhimWatch looks for WickedWhims and the animation packs you’ve installed, then tells you when creators post something newer.</p>
+            <h1>{m.findTitle}</h1>
+            <p className="lead muted">{m.findLead}</p>
 
             {detected === undefined ? (
               <div className="card found-card">
                 <p className="row-center muted">
-                  <Spinner /> Looking for your Mods folder…
+                  <Spinner /> {m.looking}
                 </p>
               </div>
             ) : detected.length === 0 ? (
@@ -98,11 +100,11 @@ export function Setup({ app }: { app: AppModel }) {
                     <CircleDashed size={18} aria-hidden="true" />
                   </span>
                   <div className="grow">
-                    <strong>Couldn’t find your Mods folder</strong>
-                    <p className="muted small">It’s usually Documents/Electronic Arts/The Sims 4/Mods. Choose it yourself.</p>
+                    <strong>{m.notFound}</strong>
+                    <p className="muted small">{m.notFoundHint}</p>
                   </div>
                   <Button icon={FolderOpen} onClick={() => addFolder(true)} data-autofocus>
-                    Choose folder…
+                    {m.chooseFolder}
                   </Button>
                 </div>
               </div>
@@ -113,7 +115,7 @@ export function Setup({ app }: { app: AppModel }) {
                     <Check size={18} aria-hidden="true" />
                   </span>
                   <div className="grow">
-                    <strong>{detected.length === 1 ? 'Found your Mods folder' : `Found ${detected.length} Mods folders`}</strong>
+                    <strong>{detected.length === 1 ? m.foundOne : m.foundMany(detected.length)}</strong>
                     {detected.length === 1 ? (
                       <p className="mono small muted">{detected[0]}</p>
                     ) : (
@@ -124,7 +126,7 @@ export function Setup({ app }: { app: AppModel }) {
                               <Checkbox
                                 checked={selected.includes(dir)}
                                 onChange={() => setSelected((prev) => (prev.includes(dir) ? prev.filter((d) => d !== dir) : [...prev, dir]))}
-                                label={`Watch ${dir}`}
+                                label={m.watch(dir)}
                               />
                               <span className="mono small">{dir}</span>
                             </label>
@@ -135,26 +137,26 @@ export function Setup({ app }: { app: AppModel }) {
                   </div>
                   {detected.length === 1 && (
                     <Button variant="quiet" onClick={() => addFolder(true)}>
-                      Change
+                      {t().common.change}
                     </Button>
                   )}
                 </div>
                 {selected.length > 0 && (
                   <dl className="found-stats">
                     <div>
-                      <dt>animation creators</dt>
+                      <dt>{m.creators}</dt>
                       <dd>{stats ? formatCount(stats.creators) : scanning ? <Spinner /> : '—'}</dd>
                     </div>
                     <div>
-                      <dt>WickedWhims installed</dt>
+                      <dt>{m.wickedWhims}</dt>
                       <dd>
                         {stats ? (
                           stats.wickedWhims ? (
                             <>
-                              <CheckCircle2 size={18} className="mint" aria-hidden="true" /> Yes
+                              <CheckCircle2 size={18} className="mint" aria-hidden="true" /> {m.yes}
                             </>
                           ) : (
-                            'Not found'
+                            m.notInstalled
                           )
                         ) : scanning ? (
                           <Spinner />
@@ -164,7 +166,7 @@ export function Setup({ app }: { app: AppModel }) {
                       </dd>
                     </div>
                     <div>
-                      <dt>other mods, left alone</dt>
+                      <dt>{m.otherMods}</dt>
                       <dd>{stats ? formatCount(stats.otherFiles) : scanning ? <Spinner /> : '—'}</dd>
                     </div>
                   </dl>
@@ -174,78 +176,72 @@ export function Setup({ app }: { app: AppModel }) {
 
             <div className="row-center gap">
               <Button variant="quiet" icon={FolderPlus} onClick={() => addFolder()}>
-                Add another folder
+                {m.addFolder}
               </Button>
-              <span className="faint small">For example, a folder of mods you’ve switched off</span>
+              <span className="faint small">{m.addFolderHint}</span>
             </div>
 
             <footer className="setup-foot">
               <span className="faint small row-center">
-                <ShieldCheck size={15} aria-hidden="true" /> Your files never leave this computer.
+                <ShieldCheck size={15} aria-hidden="true" /> {m.filesStayHere}
               </span>
               <span className="spacer" />
               <Button variant="primary" disabled={!selected.length} onClick={() => setStep(2)}>
-                Continue
+                {m.continue}
               </Button>
             </footer>
           </>
         ) : (
           <>
-            <h1>How private should WhimWatch be?</h1>
-            <p className="lead muted">Pick one to continue. You can change this any time in Settings.</p>
+            <h1>{m.privacyTitle}</h1>
+            <p className="lead muted">{m.privacyLead}</p>
 
-            <div className="level-cards" role="radiogroup" aria-label="Privacy level">
+            <div className="level-cards" role="radiogroup" aria-label={m.level}>
               <LevelCard
                 value="standard"
                 picked={level}
                 onPick={setLevel}
                 icon={<SlidersHorizontal size={20} aria-hidden="true" />}
-                title="Standard"
-                subtitle="For a computer only you use"
-                points={['Sign-ins to LoversLab and Patreon are remembered', 'Links open in your usual browser', 'Backups of replaced files kept for 30 days', 'No creator names in notifications']}
+                title={m.standard}
+                subtitle={m.standardFor}
+                points={m.standardPoints}
               />
               <LevelCard
                 value="discreet"
                 picked={level}
                 onPick={setLevel}
                 icon={<ShieldCheck size={20} aria-hidden="true" />}
-                title="Discreet"
-                subtitle="For shared computers and screen sharing"
+                title={m.discreet}
+                subtitle={m.discreetFor}
                 points={[
-                  app.snapshot?.platform === 'linux'
-                    ? 'Blurs whenever WhimWatch isn’t the active window'
-                    : 'Blurs whenever WhimWatch isn’t the active window, and stays blank in screenshots',
-                  hasPrivateBrowser ? 'Post titles hidden, links open in a private window' : 'Post titles hidden',
-                  'Nothing kept from LoversLab or Patreon after closing',
-                  'Backups deleted after 7 days',
+                  app.snapshot?.platform === 'linux' ? m.blurs : m.blursAndBlank,
+                  hasPrivateBrowser ? m.titlesHiddenPrivate : m.titlesHidden,
+                  m.nothingKept,
+                  m.backupsWeek,
                 ]}
               />
             </div>
 
             <div className="card setup-options">
               <ToggleRow
-                title="Also check automatically each time WhimWatch opens"
-                hint="Off by default: WhimWatch only checks when you click Check now. You can change this in Settings."
+                title={m.checkOnLaunch}
+                hint={m.checkOnLaunchHint}
                 checked={checkOnLaunch}
                 onChange={setCheckOnLaunch}
               />
             </div>
 
-            <Disclosure summary="What can websites see when WhimWatch checks?">
-              <p className="muted small">
-                A check visits public pages on wickedwhimsmod.com, wicked.cc, loverslab.com and patreon.com, plus WhimWatch’s creator list on
-                GitHub. Your files are never uploaded, but like any visit, those sites can see which creators’ pages were checked from your
-                internet connection.
-              </p>
+            <Disclosure summary={m.whatSitesSee}>
+              <p className="muted small">{m.whatSitesSeeBody}</p>
             </Disclosure>
 
             <footer className="setup-foot">
               <Button variant="quiet" icon={ArrowLeft} onClick={() => setStep(1)} disabled={starting}>
-                Back
+                {m.back}
               </Button>
               <span className="spacer" />
-              <Button variant="primary" onClick={start} disabled={!level || starting} title={level ? undefined : 'Pick Standard or Discreet first'}>
-                {starting ? 'Starting…' : 'Start first check'}
+              <Button variant="primary" onClick={start} disabled={!level || starting} title={level ? undefined : m.pickFirst}>
+                {starting ? m.starting : m.start}
               </Button>
             </footer>
           </>
@@ -258,7 +254,7 @@ export function Setup({ app }: { app: AppModel }) {
 function Step({ n, label, state }: { n: number; label: string; state: 'done' | 'current' | 'todo' }) {
   return (
     <li className={`step step-${state}`} aria-current={state === 'current' ? 'step' : undefined}>
-      <span className="step-mark">{state === 'done' ? <Check size={14} aria-label="Done" /> : n}</span>
+      <span className="step-mark">{state === 'done' ? <Check size={14} aria-label={t().setup.done} /> : n}</span>
       {label}
     </li>
   );
@@ -279,7 +275,7 @@ function LevelCard({
   icon: ReactNode;
   title: string;
   subtitle: string;
-  points: string[];
+  points: readonly string[];
 }) {
   const on = picked === value;
   return (

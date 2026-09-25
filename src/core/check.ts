@@ -12,10 +12,12 @@ import type {
 } from '../shared/types.js';
 import { plainTitle } from '../shared/labels.js';
 import { applyMutedSources } from '../shared/muted.js';
+import { englishMessage } from '../shared/i18n/index.js';
+import { problemFields } from '../shared/problems.js';
 import { UPDATE_SITES } from '../shared/types.js';
 import { creatorStatus, isNewer, outdatedRemotes } from './compare.js';
 import { type CreatorGroup, groupByCreator, matchName, normalizeName } from './creators.js';
-import { BrowserUnavailableError, CancelledError, type Fetcher, isChallengePage, throwIfCancelled, VerificationRequiredError } from './fetcher.js';
+import { BrowserUnavailableError, CancelledError, type Fetcher, isChallengePage, LoadTimeoutError, throwIfCancelled, VerificationRequiredError } from './fetcher.js';
 import { readGameInfo } from './game.js';
 import { classifyRemotes, datePacks } from './ownership.js';
 import { datePageByFiles } from './pack-files.js';
@@ -353,7 +355,7 @@ async function checkListing(
   signal?: AbortSignal,
 ): Promise<{ info: RemoteInfo; findings?: SourceFindings }> {
   const checkedAt = now();
-  if (listing.source === 'wwmod') return { info: { listing, checkedAt, status: 'error', error: 'Unsupported link' } };
+  if (listing.source === 'wwmod') return { info: { listing, checkedAt, status: 'error', ...problemFields({ code: 'unsupported-link' }) } };
   try {
     const { status, author: _author, patreonLinks, expandTo, ...rest } = await CHECKERS[listing.source](listing, fetcher);
     if (rest.title !== undefined) rest.title = plainTitle(rest.title);
@@ -367,13 +369,19 @@ async function checkListing(
       // from its next page: the check the user started still wants that site. Quitting cancels the
       // check first, so its clean-up on exit is never followed by more pages.
       if (!signal || signal.aborted) throw err;
-      return { info: { listing, checkedAt, status: 'error', error: 'Interrupted by signing out or clearing browsing data. Checked again next time.' } };
+      return { info: { listing, checkedAt, status: 'error', ...problemFields({ code: 'interrupted' }) } };
     }
     if (err instanceof VerificationRequiredError) {
-      return { info: { listing, checkedAt, status: 'needs-verification', error: err.message } };
+      return { info: { listing, checkedAt, status: 'needs-verification', ...problemFields({ code: 'verification', site: err.site }) } };
     }
-    const message = err instanceof BrowserUnavailableError ? err.message : `Check failed: ${(err as Error).message}`;
-    return { info: { listing, checkedAt, status: 'error', error: message } };
+    const problem =
+      err instanceof BrowserUnavailableError
+        ? ({ code: 'desktop-only', site: err.site } as const)
+        : err instanceof LoadTimeoutError
+          ? ({ code: 'timeout' } as const)
+          : // Saved, so in English (translatedError keeps it): only the words around it are translated.
+            ({ code: 'failed', reason: englishMessage(err) } as const);
+    return { info: { listing, checkedAt, status: 'error', ...problemFields(problem) } };
   }
 }
 

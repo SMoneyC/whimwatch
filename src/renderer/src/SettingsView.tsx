@@ -22,26 +22,28 @@ import {
 } from 'lucide-react';
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from 'react';
 import type { AppSnapshot, StorageInfo } from '../../shared/api';
-import { docsUrl, repoUrl, securityReportUrl, SUPPORT_URL } from '../../shared/config';
+import { docsUrl, repoUrl, securityReportUrl, SUPPORT_URL, translateUrl } from '../../shared/config';
+import { getLocale, type LanguageSetting, LOCALE_IDS, LOCALE_INFO, t } from '../../shared/i18n';
 import { openIssueForm, type ReportForm } from './Feedback';
 import { type PrivacyLevel, privacyLevel, privacyLevelPatch } from '../../shared/privacy';
-import { type AppSettings, UPDATE_SITES, type UpdateSite } from '../../shared/types';
+import { type AppSettings, UPDATE_SITES } from '../../shared/types';
 import { Dialog, useConfirm } from './dialog';
 import { acceleratorFromKey, acceleratorKeys, formatBytes, SOURCE_LABEL, timeAgo } from './format';
 import { useToast } from './toast';
 import { api, type AppModel } from './useApp';
+import { rich } from './rich';
 import { useSiteToggle } from './useSiteToggle';
 import { Banner, Button, IconButton, Kbd, Segmented, SettingRow, ToggleRow } from './ui';
 
 export type SettingsSection = 'general' | 'privacy' | 'accounts' | 'updates' | 'storage' | 'about';
 
-const SECTIONS: { id: SettingsSection; label: string; icon: typeof Info }[] = [
-  { id: 'general', label: 'General', icon: SlidersHorizontal },
-  { id: 'privacy', label: 'Privacy & discretion', icon: ShieldCheck },
-  { id: 'accounts', label: 'Accounts', icon: User },
-  { id: 'updates', label: 'Updates & backups', icon: Download },
-  { id: 'storage', label: 'Storage & data', icon: Database },
-  { id: 'about', label: 'Help & about', icon: Info },
+const SECTIONS: { id: SettingsSection; icon: typeof Info }[] = [
+  { id: 'general', icon: SlidersHorizontal },
+  { id: 'privacy', icon: ShieldCheck },
+  { id: 'accounts', icon: User },
+  { id: 'updates', icon: Download },
+  { id: 'storage', icon: Database },
+  { id: 'about', icon: Info },
 ];
 
 export function SettingsView({
@@ -59,6 +61,7 @@ export function SettingsView({
 }) {
   const snapshot = app.snapshot!;
   const set = (patch: Partial<AppSettings>): Promise<AppSnapshot | undefined> => app.run(() => api.updateSettings(patch));
+  const m = t().settings;
 
   const onNavKey = (e: KeyboardEvent, index: number): void => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -70,11 +73,11 @@ export function SettingsView({
 
   return (
     <div className="settings-page">
-      <nav className="settings-nav" aria-label="Settings">
+      <nav className="settings-nav" aria-label={t().common.settings}>
         <button type="button" className="back-link" onClick={onBack}>
-          <ArrowLeft size={16} aria-hidden="true" /> Back to creators
+          <ArrowLeft size={16} aria-hidden="true" /> {m.back}
         </button>
-        <h1>Settings</h1>
+        <h1>{t().common.settings}</h1>
         <ul>
           {SECTIONS.map((s, i) => {
             const IconComponent = s.icon;
@@ -88,14 +91,14 @@ export function SettingsView({
                   onClick={() => onSection(s.id)}
                   onKeyDown={(e) => onNavKey(e, i)}
                 >
-                  <IconComponent size={18} aria-hidden="true" /> {s.label}
+                  <IconComponent size={18} aria-hidden="true" /> {m.section[s.id]}
                 </button>
               </li>
             );
           })}
         </ul>
         <span className="spacer" />
-        <span className="faint small">WhimWatch {snapshot.appVersion}</span>
+        <span className="faint small">{m.version(snapshot.appVersion)}</span>
       </nav>
 
       <main className="settings-content" id="main">
@@ -118,11 +121,11 @@ export function SettingsView({
 type Setter = (patch: Partial<AppSettings>) => Promise<AppSnapshot | undefined>;
 
 const CHECK_OPTIONS = [
-  { value: 'manual', label: 'Only when I click Check now', patch: { checkOnLaunch: false } },
-  { value: 'always', label: 'Every time WhimWatch opens', patch: { checkOnLaunch: true, recheckAfterMinutes: 0 } },
-  { value: '60', label: 'When it opens, if the last check was over an hour ago', patch: { checkOnLaunch: true, recheckAfterMinutes: 60 } },
-  { value: '360', label: 'When it opens, if the last check was over 6 hours ago', patch: { checkOnLaunch: true, recheckAfterMinutes: 360 } },
-  { value: '1440', label: 'When it opens, if the last check was over a day ago', patch: { checkOnLaunch: true, recheckAfterMinutes: 1440 } },
+  { value: 'manual', label: 'manual', patch: { checkOnLaunch: false } },
+  { value: 'always', label: 'always', patch: { checkOnLaunch: true, recheckAfterMinutes: 0 } },
+  { value: '60', label: 'hour', patch: { checkOnLaunch: true, recheckAfterMinutes: 60 } },
+  { value: '360', label: 'sixHours', patch: { checkOnLaunch: true, recheckAfterMinutes: 360 } },
+  { value: '1440', label: 'day', patch: { checkOnLaunch: true, recheckAfterMinutes: 1440 } },
 ] as const;
 
 function checkValue(s: AppSettings): string {
@@ -152,77 +155,86 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
 function General({ snapshot, app, set }: { snapshot: AppSnapshot; app: AppModel; set: Setter }) {
   const { settings, dirs } = snapshot;
   const toggleSite = useSiteToggle(app);
+  const m = t().settings;
   const addDir = async (): Promise<void> => {
     const dir = await app.run(() => api.chooseDirectory());
     if (dir) await app.run(() => api.setDirs([...dirs, dir]));
   };
   return (
     <>
-      <PageHead title="General" />
-      <Group label="Mods folders">
+      <PageHead title={m.section.general} />
+      <Group label={m.modsFolders}>
         {dirs.map((dir) => (
           <div key={dir} className="setting-row">
             <code className="grow dir-path">{dir}</code>
-            <IconButton label="Open folder" icon={FolderOpen} size={16} onClick={() => app.run(() => api.showFile(dir))} />
-            <IconButton label={`Stop watching ${dir}`} icon={X} size={16} onClick={() => app.run(() => api.setDirs(dirs.filter((d) => d !== dir)))} disabled={dirs.length === 1} />
+            <IconButton label={m.openFolder} icon={FolderOpen} size={16} onClick={() => app.run(() => api.showFile(dir))} />
+            <IconButton label={m.stopWatching(dir)} icon={X} size={16} onClick={() => app.run(() => api.setDirs(dirs.filter((d) => d !== dir)))} disabled={dirs.length === 1} />
           </div>
         ))}
         <div className="setting-row">
-          <span className="setting-hint grow">The game only loads mods from Documents/Electronic Arts/The Sims 4/Mods. Other folders (such as mods you've switched off) are checked too.</span>
+          <span className="setting-hint grow">{m.modsFoldersHint}</span>
           <Button size="sm" icon={FolderPlus} onClick={addDir}>
-            Add folder…
+            {m.addFolder}
           </Button>
         </div>
       </Group>
-      <Group label="Appearance">
-        <SettingRow title="Theme">
+      <Group label={m.appearance}>
+        <SettingRow title={m.theme}>
           <Segmented<AppSettings['theme']>
-            label="Theme"
+            label={m.theme}
             value={settings.theme}
             onChange={(theme) => set({ theme })}
             options={[
-              { value: 'dark', label: 'Dark' },
-              { value: 'light', label: 'Light' },
-              { value: 'system', label: 'System' },
+              { value: 'dark', label: m.dark },
+              { value: 'light', label: m.light },
+              { value: 'system', label: m.system },
             ]}
           />
         </SettingRow>
-      </Group>
-      <Group label="Checking">
-        <SettingRow title="Check for updates" hint="A check reads public pages on wickedwhimsmod.com and the sites below.">
-          <select value={checkValue(settings)} onChange={(e) => set(CHECK_OPTIONS.find((o) => o.value === e.target.value)!.patch)}>
-            {CHECK_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
+        <SettingRow
+          title={m.language}
+          hint={
+            <>
+              {m.languageHint}{' '}
+              <button type="button" className="link-btn accent" onClick={() => app.run(() => api.openExternal(translateUrl()))}>
+                {m.helpTranslate}
+              </button>
+            </>
+          }
+        >
+          {/* Each language by its own name, as someone looking for theirs will read it. */}
+          <select aria-label={m.language} value={settings.language} onChange={(e) => set({ language: e.target.value as LanguageSetting })}>
+            <option value="system">{m.languageSystem(LOCALE_INFO[snapshot.systemLocale].name)}</option>
+            {LOCALE_IDS.map((id) => (
+              <option key={id} value={id} lang={LOCALE_INFO[id].intl}>
+                {LOCALE_INFO[id].name}
               </option>
             ))}
           </select>
         </SettingRow>
-        <ToggleRow
-          title="Tell me when a new WhimWatch version is out"
-          hint="Asks GitHub for the latest release each time WhimWatch starts."
-          checked={settings.checkAppUpdates}
-          onChange={(v) => set({ checkAppUpdates: v })}
-        />
-        <ToggleRow
-          title="Show packs you don't have"
-          hint="Creators on wicked.cc post a page per pack. The ones you don't have are listed under the creator with a button to get one, and are never counted as updates. Turn this off to keep WhimWatch to the packs you already have."
-          checked={settings.showNewPacks}
-          onChange={(v) => set({ showNewPacks: v })}
-        />
       </Group>
-      <Group label="Sites to check">
+      <Group label={m.checking}>
+        <SettingRow title={m.checkForUpdates} hint={m.checkForUpdatesHint}>
+          <select value={checkValue(settings)} onChange={(e) => set(CHECK_OPTIONS.find((o) => o.value === e.target.value)!.patch)}>
+            {CHECK_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {m.checkWhen[o.label]}
+              </option>
+            ))}
+          </select>
+        </SettingRow>
+        <ToggleRow title={m.appUpdates} hint={m.appUpdatesHint} checked={settings.checkAppUpdates} onChange={(v) => set({ checkAppUpdates: v })} />
+        <ToggleRow title={m.newPacks} hint={m.newPacksHint} checked={settings.showNewPacks} onChange={(v) => set({ showNewPacks: v })} />
+      </Group>
+      <Group label={m.sitesToCheck}>
         <div className="setting-row">
-          <span className="setting-hint grow">
-            A site you turn off is never contacted, and its updates don't show for any creator. The WickedWhims site is always read: it lists
-            the creators and WickedWhims itself.
-          </span>
+          <span className="setting-hint grow">{m.sitesHint}</span>
         </div>
         {UPDATE_SITES.map((site) => (
           <ToggleRow
             key={site}
             title={SOURCE_LABEL[site]}
-            hint={SITE_HINT[site]}
+            hint={m.siteHint[site]}
             checked={!settings.mutedSources.includes(site)}
             onChange={(on) => void toggleSite(site, on)}
           />
@@ -232,109 +244,89 @@ function General({ snapshot, app, set }: { snapshot: AppSnapshot; app: AppModel;
   );
 }
 
-const SITE_HINT: Record<UpdateSite, string> = {
-  wickedcc: 'Most animation packs. Downloads need no account.',
-  loverslab: 'Downloading needs a LoversLab account.',
-  patreon: 'Posts for members need a membership with that creator.',
-};
-
-const LEVEL_TEXT: Record<PrivacyLevel, string> = {
-  standard: 'Remembers sign-ins and shows everything. For a computer only you use.',
-  discreet: 'Leaves as little trace as possible, for shared computers and screen sharing. You sign in again each time you open WhimWatch.',
-  custom: "Some settings below (or how long backups are kept) differ from Standard and Discreet. Pick one to reset them.",
-};
-
 function Privacy({ snapshot, set }: { snapshot: AppSnapshot; set: Setter }) {
   const { settings } = snapshot;
   const hasBrowser = snapshot.browsers.length > 0;
   const level = privacyLevel(settings, hasBrowser);
   const memoryOnly = settings.clearBrowsingDataOnExit && settings.forgetSignInsOnExit;
   const windows = snapshot.platform === 'win32';
+  const m = t().settings;
 
   return (
     <>
-      <PageHead title="Privacy & discretion" text="Choose how much WhimWatch keeps and shows. Checking for updates never uploads your files." />
+      <PageHead title={m.section.privacy} text={m.privacyIntro} />
       <section className="settings-group">
-        <h3 className="section-label">Privacy level</h3>
+        <h3 className="section-label">{m.privacyLevel}</h3>
         <Segmented<PrivacyLevel>
-          label="Privacy level"
+          label={m.privacyLevel}
           className="wide"
           value={level}
           onChange={(v) => v !== 'custom' && set(privacyLevelPatch(v, hasBrowser))}
           options={[
-            { value: 'standard', label: 'Standard' },
-            { value: 'discreet', label: 'Discreet' },
-            { value: 'custom', label: 'Custom', disabled: level !== 'custom' },
+            { value: 'standard', label: m.standard },
+            { value: 'discreet', label: m.discreet },
+            { value: 'custom', label: m.custom, disabled: level !== 'custom' },
           ]}
         />
-        <p className="muted small level-text">{LEVEL_TEXT[level]}</p>
+        <p className="muted small level-text">{m.levelText[level]}</p>
       </section>
 
-      <Group label="On screen">
+      <Group label={m.onScreen}>
         <ToggleRow
-          title="Privacy screen"
-          hint={`Blurs WhimWatch whenever it isn't the active window${snapshot.platform === 'linux' ? '' : ', and keeps it blank in screenshots and screen sharing'}.`}
+          title={m.privacyScreen}
+          hint={m.privacyScreenHint(snapshot.platform !== 'linux')}
           checked={settings.privacyScreen}
           onChange={(v) => set({ privacyScreen: v })}
         />
         <QuickHide snapshot={snapshot} set={set} />
-        <ToggleRow
-          title="Hide page titles"
-          hint="Shows “LoversLab page” instead of post titles, which can be explicit."
-          checked={settings.hidePageTitles}
-          onChange={(v) => set({ hidePageTitles: v })}
-        />
+        <ToggleRow title={m.hideTitles} hint={m.hideTitlesHint} checked={settings.hidePageTitles} onChange={(v) => set({ hidePageTitles: v })} />
       </Group>
 
-      <Group label="Notifications">
+      <Group label={m.notifications}>
         <ToggleRow
-          title="Show creator names in notifications"
-          hint={`${windows ? 'Windows keeps a history of notifications. ' : ''}When off, they only say how many updates there are.`}
+          title={m.notificationNames}
+          hint={m.notificationNamesHint(windows)}
           checked={settings.notificationNames}
           onChange={(v) => set({ notificationNames: v })}
         />
       </Group>
 
-      <Group label="Links and sign-ins">
+      <Group label={m.linksAndSignIns}>
         <ToggleRow
-          title="Open links in a private window"
-          hint={
-            hasBrowser
-              ? `Keeps these sites out of your browser history. Right-click any Open button to choose for one link.`
-              : 'No browser with a private mode was found, so links open normally.'
-          }
+          title={m.privateLinks}
+          hint={hasBrowser ? m.privateLinksHint : m.noPrivateBrowser}
           checked={settings.privateLinks}
           onChange={(v) => set({ privateLinks: v })}
           disabled={!hasBrowser}
         />
         {hasBrowser && snapshot.browsers.length > 1 && settings.privateLinks && (
-          <SettingRow title="Browser for private links" indent>
+          <SettingRow title={m.privateBrowser} indent>
             <select value={settings.privateBrowser ?? snapshot.browsers[0]!.id} onChange={(e) => set({ privateBrowser: e.target.value })}>
               {snapshot.browsers.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
-                  {b.isDefault ? ' (default)' : ''}
+                  {b.isDefault ? t().common.defaultBrowser : ''}
                 </option>
               ))}
             </select>
           </SettingRow>
         )}
         <ToggleRow
-          title="Clear browsing data when WhimWatch closes"
-          hint="Removes the page cache, site storage, visit records and other companies' cookies the built-in LoversLab and Patreon browser keeps."
+          title={m.clearOnExit}
+          hint={m.clearOnExitHint}
           checked={settings.clearBrowsingDataOnExit}
           onChange={(v) => set({ clearBrowsingDataOnExit: v })}
         />
         <ToggleRow
           indent
-          title="Also forget sign-ins"
+          title={m.forgetSignIns}
           disabled={!settings.clearBrowsingDataOnExit}
           hint={
             memoryOnly && !snapshot.sessionsInMemory
-              ? 'LoversLab or Patreon was already used this session, so nothing from these sites is saved to disk starting the next time WhimWatch opens.'
+              ? m.forgetFromNextStart
               : !memoryOnly && snapshot.sessionsInMemory
-                ? 'Sign-ins stay in memory only until WhimWatch restarts.'
-                : 'Nothing from these sites is saved to disk. You sign in again each time.'
+                ? m.forgetUntilRestart
+                : m.forgetOn
           }
           checked={settings.forgetSignInsOnExit}
           onChange={(v) => set({ forgetSignInsOnExit: v })}
@@ -349,6 +341,7 @@ function QuickHide({ snapshot, set }: { snapshot: AppSnapshot; set: Setter }) {
   const [capturing, setCapturing] = useState(false);
   const [hint, setHint] = useState<string>();
   const keys = acceleratorKeys(settings.quickHideShortcut, snapshot.platform);
+  const m = t().settings;
 
   const onKey = async (e: KeyboardEvent): Promise<void> => {
     if (!capturing) return;
@@ -361,7 +354,7 @@ function QuickHide({ snapshot, set }: { snapshot: AppSnapshot; set: Setter }) {
     }
     const accelerator = acceleratorFromKey(e, snapshot.platform);
     if (!accelerator) {
-      setHint('Hold Ctrl or Alt (and optionally Shift), then press a letter, number or F-key.');
+      setHint(m.quickHideInvalid);
       return;
     }
     setCapturing(false);
@@ -371,29 +364,23 @@ function QuickHide({ snapshot, set }: { snapshot: AppSnapshot; set: Setter }) {
 
   return (
     <SettingRow
-      title="Quick hide"
-      hint={
-        capturing ? (
-          <span className="accent-text">{hint ?? 'Press the new shortcut, or Escape to cancel.'}</span>
-        ) : (
-          'Hides the window instantly, even when another app is in front. The same shortcut, or opening WhimWatch again, brings it back. While on, other apps can’t use this shortcut.'
-        )
-      }
+      title={m.quickHide}
+      hint={capturing ? <span className="accent-text">{hint ?? m.quickHidePress}</span> : m.quickHideHint}
     >
-      <span className="shortcut" aria-label={`Shortcut: ${keys.join(' ')}`}>
+      <span className="shortcut" aria-label={m.shortcut(keys.join(' '))}>
         {keys.map((k) => (
           <Kbd key={k}>{k}</Kbd>
         ))}
       </span>
       <Button size="sm" onClick={() => setCapturing(true)} onKeyDown={onKey} onBlur={() => setCapturing(false)} aria-live="polite">
-        {capturing ? 'Press keys…' : 'Change'}
+        {capturing ? m.pressKeys : t().common.change}
       </Button>
       <span className="switch-wrap">
         <button
           type="button"
           role="switch"
           aria-checked={settings.quickHide}
-          aria-label="Quick hide"
+          aria-label={m.quickHide}
           className={`switch ${settings.quickHide ? 'on' : ''}`}
           onClick={() => set({ quickHide: !settings.quickHide })}
         />
@@ -403,97 +390,82 @@ function QuickHide({ snapshot, set }: { snapshot: AppSnapshot; set: Setter }) {
 }
 
 function Accounts({ snapshot, app, onPrivacy }: { snapshot: AppSnapshot; app: AppModel; onPrivacy: () => void }) {
+  const m = t().settings;
   return (
     <>
-      <PageHead
-        title="Accounts"
-        text="Checking for updates works without an account. Signing in lets WhimWatch download updates that LoversLab or Patreon only give to members."
-      />
-      <Group label="Sites">
+      <PageHead title={m.section.accounts} text={m.accountsIntro} />
+      <Group label={m.sites}>
         {snapshot.accounts.map((a) => (
           <div key={a.site} className="setting-row">
             <span className={`dot ${a.signedIn ? 'on' : ''}`} aria-hidden="true" />
             <div className="setting-text">
               <span className="setting-title">{a.label}</span>
               <span className="setting-hint">
-                {a.signedIn ? 'Signed in' : 'Not signed in'}
-                {snapshot.settings.mutedSources.includes(a.site) && ' · Turned off in General, so it isn’t checked'}
+                {a.signedIn ? m.signedIn : m.notSignedIn}
+                {snapshot.settings.mutedSources.includes(a.site) && m.siteTurnedOff}
               </span>
             </div>
             <span className="spacer" />
             {a.signedIn ? (
               <Button size="sm" onClick={() => app.run(() => api.signOut(a.site))}>
-                Sign out
+                {m.signOut}
               </Button>
             ) : (
               <Button size="sm" onClick={() => app.run(() => api.signIn(a.site))}>
-                Sign in…
+                {m.signIn}
               </Button>
             )}
           </div>
         ))}
       </Group>
       {snapshot.weakCookieStorage && !snapshot.sessionsInMemory && (
-        <Banner tone="warn" title="Sign-ins aren't really encrypted on this computer" actions={<Button size="sm" onClick={onPrivacy}>Privacy settings</Button>}>
-          There's no keyring (such as GNOME Keyring or KWallet) WhimWatch can use. Turn on “Also forget sign-ins” to keep them in memory only.
+        <Banner
+          tone="warn"
+          title={m.weakStorageTitle}
+          actions={
+            <Button size="sm" onClick={onPrivacy}>
+              {m.privacySettings}
+            </Button>
+          }
+        >
+          {m.weakStorage}
         </Banner>
       )}
-      <Banner tone="info" title="How signing in works">
-        You sign in on the site's own page. WhimWatch never sees or stores your password, only the login cookies the site sets. Automated
-        downloads may go against a site's terms and could get an account flagged, so WhimWatch only downloads when you ask, one file at a
-        time.
+      <Banner tone="info" title={m.howSignInWorksTitle}>
+        {m.howSignInWorks}
       </Banner>
-      <Banner tone="info" title="Accounts made with Google need a password first">
-        Google won't sign you in from inside another app, so “Continue with Google” can't finish here — and for an account made that way,
-        Patreon turns the email box down too (“Log in with your Google account”). Sign in to Patreon in your browser and set a password
-        under Settings → Account → Login, then use your email and that password here. It's an extra way in, not a swap: Google still signs
-        you in everywhere else. Accounts that already have a password, or that sign in with an emailed code, work in the sign-in window as
-        they are.
+      <Banner tone="info" title={m.googleTitle}>
+        {m.google}
       </Banner>
     </>
   );
 }
 
-const KEEP_OPTIONS = [
-  { days: 7, label: 'For 7 days' },
-  { days: 30, label: 'For 30 days' },
-  { days: 90, label: 'For 90 days' },
-  { days: 0, label: 'Until I delete them' },
-];
+/** Days to keep backups for; 0 is until they're deleted by hand. */
+const KEEP_OPTIONS = [7, 30, 90, 0];
 
 function Updates({ snapshot, app, set }: { snapshot: AppSnapshot; app: AppModel; set: Setter }) {
   const { settings } = snapshot;
+  const m = t().settings;
   return (
     <>
-      <PageHead title="Updates & backups" text="Every update backs up the files it replaces first, so it can be undone from History." />
-      <Group label="Installing">
-        <ToggleRow
-          title="Install wicked.cc updates automatically after a check"
-          hint="Only updates that need no decisions and no sign-in. You can undo them from History."
-          checked={settings.autoInstall}
-          onChange={(v) => set({ autoInstall: v })}
-        />
+      <PageHead title={m.section.updates} text={m.updatesIntro} />
+      <Group label={m.installing}>
+        <ToggleRow title={m.autoInstall} hint={m.autoInstallHint} checked={settings.autoInstall} onChange={(v) => set({ autoInstall: v })} />
       </Group>
-      <Group label="Backups">
-        <SettingRow title="Keep backups of replaced files" hint="Once a backup is deleted, that update can't be undone.">
+      <Group label={m.backups}>
+        <SettingRow title={m.keepBackups} hint={m.keepBackupsHint}>
           <select value={settings.keepBackupsDays} onChange={(e) => set({ keepBackupsDays: Number(e.target.value) })}>
-            {KEEP_OPTIONS.map((o) => (
-              <option key={o.days} value={o.days}>
-                {o.label}
+            {KEEP_OPTIONS.map((days) => (
+              <option key={days} value={days}>
+                {days ? m.keepFor(days) : m.keepUntilDeleted}
               </option>
             ))}
           </select>
         </SettingRow>
-        <SettingRow
-          title="Backup folder"
-          hint={
-            <>
-              Full copies of the mod files updates replaced, outside your Mods folder: <code>{snapshot.backupRoot}</code>
-            </>
-          }
-        >
+        <SettingRow title={m.backupFolder} hint={rich(m.backupFolderHint, { path: <code>{snapshot.backupRoot}</code> })}>
           <Button size="sm" icon={FolderOpen} onClick={() => app.run(() => api.openBackupFolder())}>
-            Open
+            {m.open}
           </Button>
         </SettingRow>
       </Group>
@@ -505,6 +477,7 @@ function Storage({ snapshot, app }: { snapshot: AppSnapshot; app: AppModel }) {
   const confirm = useConfirm();
   const toast = useToast();
   const [storage, setStorage] = useState<StorageInfo>();
+  const m = t().settings;
 
   useEffect(() => {
     api.getStorage().then(setStorage, () => undefined);
@@ -512,15 +485,15 @@ function Storage({ snapshot, app }: { snapshot: AppSnapshot; app: AppModel }) {
 
   const deleteBackups = async (): Promise<void> => {
     const ok = await confirm({
-      title: 'Delete all backups?',
-      body: "Updates you've already installed can no longer be undone. Your Mods folder isn't changed.",
-      confirmLabel: 'Delete backups',
+      title: m.deleteBackupsTitle,
+      body: m.deleteBackupsBody,
+      confirmLabel: m.deleteBackups,
       danger: true,
     });
     if (!ok) return;
     if (await app.run(() => api.clearBackups())) {
       setStorage(await api.getStorage());
-      toast({ text: 'Backups deleted' });
+      toast({ text: m.backupsDeleted });
     }
   };
 
@@ -528,32 +501,29 @@ function Storage({ snapshot, app }: { snapshot: AppSnapshot; app: AppModel }) {
     const next = await app.run(() => api.clearCaches());
     if (next) {
       setStorage(next);
-      toast({ text: 'Downloads, browsing data and log cleared' });
+      toast({ text: m.cachesCleared });
     }
   };
 
   return (
     <>
-      <PageHead title="Storage & data" text="What WhimWatch keeps outside your Mods folder." />
-      <Group label="Space used">
-        <SettingRow title="Backups" hint={storage ? formatBytes(storage.backups) : '…'}>
+      <PageHead title={m.section.storage} text={m.storageIntro} />
+      <Group label={m.spaceUsed}>
+        <SettingRow title={m.backups} hint={storage ? formatBytes(storage.backups) : '…'}>
           <Button size="sm" icon={Trash2} onClick={deleteBackups} disabled={!storage?.backups}>
-            Delete all…
+            {m.deleteAll}
           </Button>
         </SettingRow>
-        <SettingRow title="Downloads, browsing data and log" hint={`${storage ? formatBytes(storage.caches) : '…'} · Clearing keeps your sign-ins and settings`}>
+        <SettingRow title={m.caches} hint={m.cachesHint(storage ? formatBytes(storage.caches) : '…')}>
           <Button size="sm" onClick={clearCaches}>
-            Clear
+            {m.clear}
           </Button>
         </SettingRow>
       </Group>
-      <Group label="Remove everything">
-        <SettingRow
-          title="Remove all WhimWatch data"
-          hint="Deletes settings, sign-ins, backups and logs from this computer, then closes WhimWatch. Your Mods folder isn't changed."
-        >
+      <Group label={m.removeEverything}>
+        <SettingRow title={m.removeAll} hint={m.removeAllHint}>
           <Button size="sm" variant="danger" onClick={() => app.run(() => api.removeAllData())}>
-            Remove all data…
+            {m.removeAllButton}
           </Button>
         </SettingRow>
       </Group>
@@ -576,27 +546,28 @@ function VersionRow({ app }: { app: AppModel }) {
     setChecking(false);
   };
 
+  const m = t().settings;
   const hint = checking
-    ? 'Asking GitHub for the latest release…'
+    ? m.askingGitHub
     : update
-      ? `Out of date. WhimWatch ${update.version} is the latest${update.hidden ? ', and you hid the notice about it' : ''}.`
+      ? m.outOfDate(update.version, Boolean(update.hidden))
       : snapshot.appUpdateCheckedAt !== undefined
-        ? `You're on the latest version. Checked ${timeAgo(snapshot.appUpdateCheckedAt)}.`
-        : 'Not checked for a newer version yet.';
+        ? m.latest(timeAgo(snapshot.appUpdateCheckedAt))
+        : m.notCheckedYet;
 
   return (
-    <SettingRow title={`Version ${snapshot.appVersion}`} hint={hint}>
+    <SettingRow title={m.versionTitle(snapshot.appVersion)} hint={hint}>
       {update ? (
         <Button size="sm" variant="primary" icon={Download} onClick={() => app.run(() => api.openExternal(update.url))}>
-          Update to {update.version}
+          {m.updateTo(update.version)}
         </Button>
       ) : (
         <Button size="sm" icon={RefreshCw} onClick={check} disabled={checking}>
-          {checking ? 'Checking…' : 'Check for updates'}
+          {checking ? m.checkingEllipsis : m.checkForUpdates}
         </Button>
       )}
       <Button size="sm" icon={CodeXml} onClick={() => app.run(() => api.openExternal(repoUrl()))}>
-        Source code
+        {m.sourceCode}
       </Button>
     </SettingRow>
   );
@@ -605,46 +576,47 @@ function VersionRow({ app }: { app: AppModel }) {
 function About({ app, onReport }: { app: AppModel; onReport: (form: ReportForm) => void }) {
   const [diagnostics, setDiagnostics] = useState<string>();
   const [licenses, setLicenses] = useState<string>();
+  const m = t().settings;
   return (
     <>
-      <PageHead title="Help & about" text="Links open on GitHub in your browser (in a private window, if you chose that for links)." />
-      <Group label="Help">
-        <SettingRow title="Guide and FAQ" hint="Installing, how checks and updates work, privacy, your data, and known limitations.">
+      <PageHead title={m.section.about} text={m.aboutIntro} />
+      <Group label={m.help}>
+        <SettingRow title={m.guide} hint={m.guideHint}>
           <Button size="sm" icon={BookOpen} onClick={() => app.run(() => api.openExternal(docsUrl()))}>
-            Open the guide
+            {m.openGuide}
           </Button>
         </SettingRow>
       </Group>
-      <Group label="Feedback">
-        <SettingRow title="Report a bug" hint="Something doesn't work as expected. You see the diagnostics before anything is copied.">
+      <Group label={m.feedback}>
+        <SettingRow title={m.reportBug} hint={m.reportBugHint}>
           <Button size="sm" icon={Bug} onClick={() => onReport('bug_report')}>
-            Report a bug…
+            {m.reportBugButton}
           </Button>
         </SettingRow>
-        <SettingRow title="A site stopped working" hint="wicked.cc, LoversLab, Patreon or the WickedWhims page isn't read any more, usually after a redesign.">
+        <SettingRow title={m.siteStopped} hint={m.siteStoppedHint}>
           <Button size="sm" icon={MessageSquareWarning} onClick={() => onReport('site_changed')}>
-            Report a site problem…
+            {m.reportSite}
           </Button>
         </SettingRow>
-        <SettingRow title="Missing or wrong creator page" hint="A creator isn't found, or WhimWatch checks the wrong page for them.">
+        <SettingRow title={m.wrongCreator} hint={m.wrongCreatorHint}>
           <Button size="sm" icon={UserSearch} onClick={() => openIssueForm(app, 'creator_link')}>
-            Report a creator link
+            {m.reportCreator}
           </Button>
         </SettingRow>
-        <SettingRow title="Suggest a feature" hint="Ideas for what WhimWatch could do better.">
+        <SettingRow title={m.suggest} hint={m.suggestHint}>
           <Button size="sm" icon={Lightbulb} onClick={() => openIssueForm(app, 'feature_request')}>
-            Suggest a feature
+            {m.suggest}
           </Button>
         </SettingRow>
-        <SettingRow title="Security problem" hint="Please report it privately, never in a public issue.">
+        <SettingRow title={m.security} hint={m.securityHint}>
           <Button size="sm" icon={ShieldAlert} onClick={() => app.run(() => api.openExternal(securityReportUrl()))}>
-            Report privately
+            {m.reportPrivately}
           </Button>
         </SettingRow>
       </Group>
       <Group label="WhimWatch">
         <VersionRow app={app} />
-        <SettingRow title="Support WhimWatch" hint="WhimWatch is free and open source. If it saves you time, you can buy the developer a coffee.">
+        <SettingRow title={m.support} hint={m.supportHint}>
           <Button
             size="sm"
             icon={Coffee}
@@ -654,13 +626,10 @@ function About({ app, onReport }: { app: AppModel; onReport: (form: ReportForm) 
               void app.run(() => api.showLinkMenu(SUPPORT_URL));
             }}
           >
-            Buy me a coffee
+            {m.coffee}
           </Button>
         </SettingRow>
-        <SettingRow
-          title="Diagnostics"
-          hint="Versions, settings, a summary of the last check and recent log lines for a bug report. You see everything before copying or saving it."
-        >
+        <SettingRow title={m.diagnostics} hint={m.diagnosticsHint}>
           <Button
             size="sm"
             onClick={async () => {
@@ -668,13 +637,10 @@ function About({ app, onReport }: { app: AppModel; onReport: (form: ReportForm) 
               if (text !== undefined) setDiagnostics(text);
             }}
           >
-            Diagnostics…
+            {m.diagnosticsButton}
           </Button>
         </SettingRow>
-        <SettingRow
-          title="Licences"
-          hint="WhimWatch is open source under the MIT License. It includes the Manrope and JetBrains Mono fonts (SIL Open Font License), Lucide icons, React, 7-Zip, UnRAR and other components under their own licences."
-        >
+        <SettingRow title={m.licences} hint={m.licencesHint}>
           <Button
             size="sm"
             onClick={async () => {
@@ -682,15 +648,16 @@ function About({ app, onReport }: { app: AppModel; onReport: (form: ReportForm) 
               if (text !== undefined) setLicenses(text);
             }}
           >
-            View…
+            {m.view}
           </Button>
         </SettingRow>
       </Group>
-      <p className="faint small">WhimWatch is an independent project, not affiliated with TURBODRIVER, Electronic Arts, wicked.cc, LoversLab or Patreon.</p>
+      <p className="faint small">{m.independent}</p>
       {diagnostics !== undefined && <DiagnosticsDialog text={diagnostics} app={app} onClose={() => setDiagnostics(undefined)} />}
       {licenses !== undefined && (
-        <Dialog title="Licences" subtitle="WhimWatch’s licence, then everything it includes." onClose={() => setLicenses(undefined)} width={760}>
-          <textarea className="diagnostics mono licenses" readOnly value={licenses} rows={22} spellCheck={false} aria-label="Licence texts" />
+        <Dialog title={m.licences} subtitle={m.licencesSubtitle} onClose={() => setLicenses(undefined)} width={760}>
+          {/* The licences themselves are legal texts, and stay in the language they're written in. */}
+          <textarea className="diagnostics mono licenses" readOnly value={licenses} rows={22} spellCheck={false} aria-label={m.licenceTexts} lang="en" />
         </Dialog>
       )}
     </>
@@ -700,10 +667,11 @@ function About({ app, onReport }: { app: AppModel; onReport: (form: ReportForm) 
 /** Shows exactly what a bug report would include before it's copied or saved. */
 function DiagnosticsDialog({ text, app, onClose }: { text: string; app: AppModel; onClose: () => void }) {
   const toast = useToast();
+  const m = t().settings;
   return (
     <Dialog
-      title="Diagnostics"
-      subtitle="This is everything that gets copied or saved. It has no creator names or page addresses, and your home folder shows as ~."
+      title={m.diagnostics}
+      subtitle={m.diagnosticsSubtitle}
       onClose={onClose}
       width={720}
       footer={
@@ -712,24 +680,26 @@ function DiagnosticsDialog({ text, app, onClose }: { text: string; app: AppModel
           <Button
             variant="quiet"
             onClick={async () => {
-              if (await app.run(() => api.saveDiagnostics())) toast({ text: 'Diagnostics saved' });
+              if (await app.run(() => api.saveDiagnostics())) toast({ text: m.diagnosticsSaved });
             }}
           >
-            Save to file…
+            {m.saveToFile}
           </Button>
           <Button
             variant="primary"
             onClick={async () => {
               await app.run(() => api.copyDiagnostics());
-              toast({ text: 'Diagnostics copied' });
+              toast({ text: m.diagnosticsCopied });
             }}
           >
-            Copy
+            {m.copy}
           </Button>
         </>
       }
     >
-      <textarea className="diagnostics mono" readOnly value={text} rows={16} spellCheck={false} aria-label="Diagnostics text" />
+      {getLocale() !== 'en' && <p className="muted small">{t().feedback.englishNote}</p>}
+      {/* Always English, so whoever reads the report can. */}
+      <textarea className="diagnostics mono" readOnly value={text} rows={16} spellCheck={false} aria-label={m.diagnosticsText} lang="en" />
     </Dialog>
   );
 }

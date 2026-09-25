@@ -140,7 +140,7 @@ describe('LoversLab', () => {
     expect(renamed.version).toBe('2.6');
 
     const other = await checkLoversLab(listing, { get: unused, head: unused, browserGet: respond('https://www.loverslab.com/files/file/28988-someone-else/') });
-    expect(other).toMatchObject({ status: 'error', error: 'LoversLab showed a different page' });
+    expect(other).toMatchObject({ status: 'error', problem: { code: 'different-page' }, error: 'LoversLab showed a different page' });
   });
 
   it('recognizes Cloudflare challenge pages', () => {

@@ -1,8 +1,9 @@
 import { BrowserWindow, dialog, type WebContents } from 'electron';
 import type { AccountStatus } from '../shared/api.js';
+import { t } from '../shared/i18n/index.js';
 import { type BrowserPool, type BrowserSite, browserUserAgent, SITES, siteSession, useSiteSession } from './browser.js';
 import { openUrl } from './open.js';
-import { isRejectionTitle, isSignInRejection, PASSWORD_HELP, PASSWORD_PATH, signInProvider } from './sign-in-provider.js';
+import { isRejectionTitle, isSignInRejection, PASSWORD_HELP, signInProvider } from './sign-in-provider.js';
 
 export async function accountStatus(site: BrowserSite): Promise<AccountStatus> {
   const { origin, sessionCookie, label } = SITES[site];
@@ -22,7 +23,7 @@ export function signIn(site: BrowserSite, parent?: BrowserWindow): Promise<Accou
     height: 760,
     parent,
     modal: false,
-    title: `Sign in to ${SITES[site].label}`,
+    title: t().main.signInTitle(SITES[site].label),
     autoHideMenuBar: true,
     webPreferences: { session: useSiteSession(site), sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false },
   });
@@ -129,12 +130,13 @@ class SignInGuide {
     const { label, loginUrl } = SITES[this.site];
     const target = win.isDestroyed() ? this.main : win;
     if (target.isDestroyed()) return;
+    const m = t().main;
     const { response } = await dialog.showMessageBox(target, {
       type: 'info',
-      title: "Google sign-in doesn't work inside apps",
-      message: 'For security reasons, Google refuses in-app sign-ins.',
-      detail: `Patreon checks will continue to work, but to download updates, the workaround is to set a password *in addition to* your Google sign-in: Open ${label} in your browser, sign in with Google there, and ${PASSWORD_PATH[this.site] ?? 'add a password in your account settings'}.\nThen sign in here with your email and that password.\nGoogle sign-in still works in addition to the password, and WhimWatch never sees your password.`,
-      buttons: [`Open ${label} in my browser`, `Back to the ${label} login page`, 'Leave it open'],
+      title: m.googleTitle,
+      message: m.googleMessage,
+      detail: m.googleDetail(label, this.site === 'patreon' ? m.passwordPath.patreon : m.passwordPath.other),
+      buttons: [m.googleOpen(label), m.googleBack(label), m.googleLeave],
       defaultId: 0,
       cancelId: 2,
       noLink: true,

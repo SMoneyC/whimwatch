@@ -1,4 +1,5 @@
 import { AlertTriangle, Ban, CheckCircle2, Download, ExternalLink, EyeOff, Gamepad2, RotateCcw } from 'lucide-react';
+import { t } from '../../shared/i18n';
 import type { CoreResult, GameInfo } from '../../shared/types';
 import { CORE_KEY, coreUpdatable } from './eligibility';
 import { formatCalendarDate, formatShortDate } from './format';
@@ -17,12 +18,13 @@ export function PlayCard({ core, game, app, onUpdate }: { core: CoreResult; game
   const health = gameHealth(game, core, snapshot.dismissedGameWarnings);
   const ToneIcon = TONE_ICON[health.tone];
   const big = health.tone === 'warn' || health.tone === 'error';
+  const m = t().play;
 
   const ww = <WickedWhimsLine core={core} app={app} onUpdate={onUpdate} compact={!big} />;
 
   if (!big) {
     return (
-      <section className={`card play-card slim tone-${health.tone}`} aria-label="Game and WickedWhims">
+      <section className={`card play-card slim tone-${health.tone}`} aria-label={m.label}>
         <span className="tone-icon round">
           <ToneIcon size={16} aria-hidden="true" />
         </span>
@@ -35,7 +37,7 @@ export function PlayCard({ core, game, app, onUpdate }: { core: CoreResult; game
   }
 
   return (
-    <section className={`card play-card tone-${health.tone}`} aria-label="Game and WickedWhims">
+    <section className={`card play-card tone-${health.tone}`} aria-label={m.label}>
       <div className="play-main">
         <span className="tone-icon">
           <ToneIcon size={22} aria-hidden="true" />
@@ -57,17 +59,17 @@ export function PlayCard({ core, game, app, onUpdate }: { core: CoreResult; game
               for (const w of health.warnings) await api.dismissGameWarning(w.id);
             })}
           >
-            Hide until the game updates
+            {m.hideUntilUpdate}
           </Button>
         </div>
         {(health.yourGame || health.supportedUpTo) && (
           <dl className="versions">
             <div>
-              <dt>Your game</dt>
+              <dt>{m.yourGame}</dt>
               <dd className={`mono ${health.tone === 'warn' ? 'warn-text' : ''}`}>{health.yourGame ?? '—'}</dd>
             </div>
             <div>
-              <dt>Supported up to</dt>
+              <dt>{m.supportedUpTo}</dt>
               <dd className="mono">{health.supportedUpTo ?? '—'}</dd>
             </div>
           </dl>
@@ -81,28 +83,31 @@ export function PlayCard({ core, game, app, onUpdate }: { core: CoreResult; game
 function WickedWhimsLine({ core, app, onUpdate, compact }: { core: CoreResult; app: AppModel; onUpdate: () => void; compact: boolean }) {
   const installed = core.installed;
   const busy = app.updates[CORE_KEY];
+  const m = t();
   const menu: MenuItem[] = [];
-  if (core.downloadPageUrl) menu.push({ label: 'Open download page', icon: ExternalLink, onSelect: () => void app.run(() => api.openExternal(core.downloadPageUrl!)) });
+  if (core.downloadPageUrl) menu.push({ label: m.play.openDownloadPage, icon: ExternalLink, onSelect: () => void app.run(() => api.openExternal(core.downloadPageUrl!)) });
   if (core.status === 'update-available' && core.releasedAt !== undefined) {
-    menu.push({ label: 'Mark as seen', icon: EyeOff, onSelect: () => void app.run(() => api.dismiss(CORE_KEY, core.releasedAt!)) });
+    menu.push({ label: m.common.markAsSeen, icon: EyeOff, onSelect: () => void app.run(() => api.dismiss(CORE_KEY, core.releasedAt!)) });
   }
   if (core.status !== 'update-available' && app.snapshot?.seenHistory.some((e) => !e.undoneAt && e.entries.some((x) => x.key === CORE_KEY))) {
-    menu.push({ label: 'Undo mark as seen', icon: RotateCcw, onSelect: () => void app.run(() => api.undismiss(CORE_KEY)) });
+    menu.push({ label: m.common.undoMarkAsSeen, icon: RotateCcw, onSelect: () => void app.run(() => api.undismiss(CORE_KEY)) });
   }
 
   // The compact line names WickedWhims itself; the full card already has it as a heading.
-  const subject = compact ? 'WickedWhims ' : '';
   let detail: string;
-  if (core.error && !core.latestVersion) detail = "Couldn't read the WickedWhims download page";
-  else if (!installed) detail = `${compact ? "WickedWhims isn't" : "Isn't"} in your Mods folders${core.latestVersion ? ` · Latest is v${core.latestVersion}` : ''}`;
-  else if (core.status === 'update-available') detail = `${subject}v${core.latestVersion} is out · You have the ${formatShortDate(installed.mtimeMs)} build`;
-  else detail = core.latestVersion ? `${subject}v${core.latestVersion} · Released ${formatCalendarDate(core.releasedAt)}` : `${subject}installed ${formatShortDate(installed.mtimeMs)}`;
+  if (core.error && !core.latestVersion) detail = m.play.couldntRead;
+  else if (!installed) detail = `${m.play.notInstalled(compact)}${core.latestVersion ? ` · ${m.play.latestIs(core.latestVersion)}` : ''}`;
+  else if (core.status === 'update-available') detail = m.play.updateOut(compact, core.latestVersion ?? '', formatShortDate(installed.mtimeMs));
+  else
+    detail = core.latestVersion
+      ? m.play.current(compact, core.latestVersion, formatCalendarDate(core.releasedAt))
+      : m.play.installedOn(compact, formatShortDate(installed.mtimeMs));
 
   return (
     <div className={`ww-line ${compact ? 'compact' : ''}`}>
       {!compact && (
         <span className="ww-name">
-          WickedWhims <span className="faint">by TURBODRIVER</span>
+          WickedWhims <span className="faint">{m.play.byAuthor}</span>
         </span>
       )}
       <span className={`ww-detail ${core.error && !core.latestVersion ? 'error-text' : 'muted'}`}>{detail}</span>
@@ -111,15 +116,15 @@ function WickedWhimsLine({ core, app, onUpdate, compact }: { core: CoreResult; a
       {installed && core.status === 'up-to-date' && !compact && <StatusMarker status="current" />}
       {coreUpdatable(core) && (
         <Button size="sm" icon={Download} onClick={onUpdate} disabled={busy !== undefined && busy.stage !== 'done' && busy.stage !== 'error'}>
-          Update
+          {m.common.update}
         </Button>
       )}
       {!installed && core.downloadPageUrl && (
         <Button size="sm" icon={ExternalLink} onClick={() => app.run(() => api.openExternal(core.downloadPageUrl!))}>
-          Download page
+          {m.play.downloadPage}
         </Button>
       )}
-      {menu.length > 0 && installed && <MenuButton label="More for WickedWhims" items={menu} />}
+      {menu.length > 0 && installed && <MenuButton label={m.play.moreForWickedWhims} items={menu} />}
     </div>
   );
 }

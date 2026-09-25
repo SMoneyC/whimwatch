@@ -39,6 +39,7 @@ import {
   type FolderPreview,
   type OtherFile,
 } from '../shared/api.js';
+import { englishMessage, getLocale, isLanguageSetting, isLocaleId, type LocaleId, resolveLocale, setLocale, t, translatedError } from '../shared/i18n/index.js';
 import { applyMutedSources } from '../shared/muted.js';
 import {
   type AppSettings,
@@ -84,7 +85,8 @@ export class AppController {
   private accounts: AccountStatus[] = [];
   private batch?: BatchState;
   private checkAbort?: AbortController;
-  private checkMessage?: AppSnapshot['checkMessage'];
+  /** Worded when the snapshot is made, so a change of language reaches it. */
+  private checkMessage?: { tone: 'info' | 'error'; text: () => string };
   private saves = new SaveQueue();
   private scanCache: ScanCache = {};
   private scanCacheSaves = new SaveQueue();
@@ -124,8 +126,24 @@ export class AppController {
     controller.pool.onVerificationNeeded = (site) => controller.emit({ type: 'verification-needed', site });
     controller.pool.onVerificationPassed = (site) => controller.emit({ type: 'verification-passed', site });
     controller.weakCookieStorage = weakCookieStorage();
+    controller.applyLanguage();
     await controller.refreshAccounts();
     return controller;
+  }
+
+  /** The language "system" stands for: the first of the system's preferred languages WhimWatch has. */
+  private systemLocale(): LocaleId {
+    return resolveLocale(app.getPreferredSystemLanguages());
+  }
+
+  /**
+   * Shows WhimWatch in the chosen language from now on: this process's dialogs, menus, notifications
+   * and messages, and (through the snapshot) the window. Only WhimWatch's own text: Chromium's locale
+   * is left alone, so the language sites are asked for, and the pages the checks read, stay the same.
+   */
+  private applyLanguage(): void {
+    const { language } = this.state.settings;
+    setLocale(isLocaleId(language) ? language : this.systemLocale());
   }
 
   isSignedIn(site: BrowserSite): boolean {
@@ -175,7 +193,7 @@ export class AppController {
     } catch {
       registered = false;
     }
-    if (!registered) throw new Error("That shortcut is already used by another app or can't be used. Choose a different one.");
+    if (!registered) throw translatedError((m) => m.main.shortcutTaken);
     this.registeredShortcut = quickHideShortcut;
   }
 
@@ -265,10 +283,10 @@ export class AppController {
       rejectedLinks: Object.fromEntries(Object.entries(s.linkPrefs).map(([k, v]) => [k, v.rejected])),
       creatorMutedSources: Object.fromEntries(Object.entries(s.linkPrefs).flatMap(([k, v]) => (v.mutedSources?.length ? [[k, v.mutedSources]] : []))),
       ignoredFiles: Object.fromEntries(Object.entries(s.linkPrefs).flatMap(([k, v]) => (v.ignoredFiles?.length ? [[k, v.ignoredFiles]] : []))),
-      browsers: (await installedBrowsers()).map(({ id, name, privateLabel, isDefault }) => ({ id, name, privateLabel, isDefault })),
+      browsers: (await installedBrowsers()).map(({ id, name, privateMode, isDefault }) => ({ id, name, privateMode, isDefault })),
       backupRoot: this.backupRoot,
       batch: this.batch,
-      checkMessage: this.checkMessage,
+      checkMessage: this.checkMessage && { tone: this.checkMessage.tone, text: this.checkMessage.text() },
       appUpdate: isNewerRelease(s.appRelease, app.getVersion())
         ? { version: s.appRelease!.version, url: s.appRelease!.url, hidden: s.appRelease!.version === s.dismissedAppVersion || undefined }
         : undefined,
@@ -280,6 +298,8 @@ export class AppController {
       seenHistory: s.seenHistory,
       firstCheckNotice: s.firstCheckNotice,
       platform: process.platform === 'win32' || process.platform === 'darwin' ? process.platform : 'linux',
+      locale: getLocale(),
+      systemLocale: this.systemLocale(),
     };
   }
 
@@ -328,7 +348,7 @@ export class AppController {
       return await this.commit();
     } catch (err) {
       const message = (err as Error).message;
-      if (force) throw new Error(`Couldn't ask GitHub for the latest version: ${message}`, { cause: err });
+      if (force) throw translatedError((m) => m.main.githubFailed(message), Error, { cause: err });
       console.warn('App update check failed:', message);
       return this.snapshot();
     }
@@ -403,10 +423,11 @@ export class AppController {
     } catch (err) {
       // The previous results stay: nothing is saved from an interrupted or failed check.
       if (abort.signal.aborted) {
-        this.checkMessage = { tone: 'info', text: 'Check cancelled. Showing the results from the previous check.' };
+        this.checkMessage = { tone: 'info', text: () => t().main.checkCancelled };
       } else {
         console.error('Check failed', err);
-        this.checkMessage = { tone: 'error', text: `Check failed: ${(err as Error).message}` };
+        const reason = (err as Error).message;
+        this.checkMessage = { tone: 'error', text: () => t().main.checkFailed(reason) };
       }
     } finally {
       this.running = false;
@@ -448,7 +469,7 @@ export class AppController {
   }
 
   async clearBackups(): Promise<AppSnapshot> {
-    if (this.updatesBusy()) throw new Error('Wait for the current update to finish first.');
+    if (this.updatesBusy()) throw translatedError((m) => m.main.waitForUpdate);
     const now = Date.now();
     for (const record of this.state.installs.filter(hasLiveBackup)) {
       await removeDir(record.backupDir);
@@ -513,7 +534,7 @@ export class AppController {
     }
     const lines = [
       `WhimWatch ${app.getVersion()} · Electron ${process.versions.electron} · Chrome ${process.versions.chrome} · Node ${process.versions.node}`,
-      `OS: ${process.platform} ${process.getSystemVersion()} (${process.arch})`,
+      `OS: ${process.platform} ${process.getSystemVersion()} (${process.arch}) · Language ${getLocale()}`,
       `Mods folders: ${describeModsDirs(s.dirs, { home: homedir(), documents: app.getPath('documents'), platform: process.platform })}`,
       `Settings: ${JSON.stringify(s.settings)}`,
       `Signed in: ${this.accounts.map((a) => `${a.label} ${a.signedIn ? 'yes' : 'no'}`).join(', ')} · site sessions ${siteSessionsPersist() ? 'on disk' : 'in memory'}${this.weakCookieStorage ? ' · no keyring' : ''}`,
@@ -537,7 +558,7 @@ export class AppController {
       const [own, others] = await Promise.all([readFile(join(dir, 'LICENSE.txt'), 'utf8'), readFile(join(dir, 'THIRD_PARTY_LICENSES.txt'), 'utf8')]);
       return `WhimWatch\n\n${own.trim()}\n\n\n${others}`;
     } catch {
-      return 'The licence list is created when WhimWatch is built (npm run build). See LICENSE and THIRD_PARTY_NOTICES.md in the source code.';
+      return t().main.licencesMissing;
     }
   }
 
@@ -548,9 +569,9 @@ export class AppController {
   async saveDiagnostics(): Promise<boolean> {
     const text = this.diagnostics ?? (await this.getDiagnostics());
     const options = {
-      title: 'Save diagnostics',
+      title: t().main.saveDiagnostics,
       defaultPath: join(app.getPath('downloads'), 'whimwatch-diagnostics.txt'),
-      filters: [{ name: 'Text', extensions: ['txt'] }],
+      filters: [{ name: t().main.textFiles, extensions: ['txt'] }],
     };
     const res = this.window ? await dialog.showSaveDialog(this.window, options) : await dialog.showSaveDialog(options);
     if (res.canceled || !res.filePath) return false;
@@ -564,22 +585,15 @@ export class AppController {
    * and downloads.
    */
   async removeAllData(updater: { isBusy(): boolean; readonly tempRoot: string }): Promise<void> {
-    if (updater.isBusy()) throw new Error('Wait for the current update to finish first.');
+    const m = t().main;
+    if (updater.isBusy()) throw translatedError((m) => m.main.waitForUpdate);
     const backups = await dirSize(this.backupRoot);
     const options = {
       type: 'warning' as const,
-      title: 'Remove all WhimWatch data',
-      message: 'Remove all WhimWatch data from this computer?',
-      detail: [
-        'WhimWatch will close, then delete:',
-        '• settings, check results and your link choices',
-        '• LoversLab and Patreon sign-ins and browsing data',
-        `• backups of replaced mod files${backups ? ` (${Math.max(1, Math.round(backups / 1024 / 1024))} MB)` : ''}, so past updates can't be undone`,
-        '• logs and leftover downloads',
-        '',
-        'Your Mods folder is not changed. Like any deleted file, these may be recoverable with disk tools until the space is reused.',
-      ].join('\n'),
-      buttons: ['Remove everything and quit', 'Cancel'],
+      title: m.removeTitle,
+      message: m.removeMessage,
+      detail: m.removeDetail(backups ? Math.max(1, Math.round(backups / 1024 / 1024)) : undefined),
+      buttons: [m.removeConfirm, t().common.cancel],
       defaultId: 1,
       cancelId: 1,
       noLink: true,
@@ -605,7 +619,7 @@ export class AppController {
   }
 
   async chooseDirectory(): Promise<string | undefined> {
-    const options = { title: 'Choose a Mods folder', properties: ['openDirectory' as const] };
+    const options = { title: t().main.chooseModsFolder, properties: ['openDirectory' as const] };
     const res = this.window ? await dialog.showOpenDialog(this.window, options) : await dialog.showOpenDialog(options);
     return res.canceled ? undefined : res.filePaths[0];
   }
@@ -638,6 +652,10 @@ export class AppController {
     if (p.theme === 'system' || p.theme === 'dark' || p.theme === 'light') {
       s.theme = p.theme;
       this.applyTheme();
+    }
+    if (isLanguageSetting(p.language)) {
+      s.language = p.language;
+      this.applyLanguage();
     }
     if (typeof p.quickHide === 'boolean' || typeof p.quickHideShortcut === 'string') {
       const before = { quickHide: s.quickHide, quickHideShortcut: s.quickHideShortcut };
@@ -687,7 +705,7 @@ export class AppController {
    */
   async setFileIgnored(key: unknown, name: unknown, ignored: unknown): Promise<AppSnapshot> {
     const file = str(name).trim().toLowerCase();
-    if (!file || file.length > 255) throw new Error('That file name is not valid.');
+    if (!file || file.length > 255) throw translatedError((m) => m.main.invalidFileName);
     const prefs = this.prefs(str(key));
     const rest = (prefs.ignoredFiles ?? []).filter((f) => f !== file);
     prefs.ignoredFiles = ignored === true ? [...rest, file].slice(-200) : rest;
@@ -810,7 +828,7 @@ export class AppController {
 
   async undoSeen(id: unknown): Promise<AppSnapshot> {
     const event = this.state.seenHistory.find((e) => e.id === id);
-    if (!event || event.undoneAt) throw new Error('That was already undone.');
+    if (!event || event.undoneAt) throw translatedError((m) => m.main.alreadyUndone);
     for (const entry of event.entries) {
       const seen = entry.page ? this.state.linkPrefs[entry.key]?.seen : undefined;
       const slot = entry.page ? linkKey(entry.page) : entry.key;
@@ -905,11 +923,11 @@ export class AppController {
 
   async addLink(key: unknown, url: unknown): Promise<AppSnapshot> {
     const link = normalizeUserUrl(str(url));
-    const problem = linkProblem(link);
-    if (problem) throw new Error(problem);
+    // Worded again for the log, in English (translatedError).
+    if (linkProblem(link)) throw translatedError((m) => linkProblem(link, m.links)!);
     const site = classifyUrl(link) as UpdateSite;
     if (this.state.settings.mutedSources.includes(site)) {
-      throw new Error(`${SOURCE_LABEL[site]} is turned off in Settings → General. Turn it on there to add this page.`);
+      throw translatedError((m) => m.main.siteOff(SOURCE_LABEL[site]));
     }
     const k = str(key);
     const prefs = this.prefs(k);
@@ -950,7 +968,7 @@ export class AppController {
       }
       await this.commit();
     } catch (err) {
-      console.warn('Reading the added page failed; the next check will:', (err as Error).message);
+      console.warn('Reading the added page failed; the next check will:', englishMessage(err));
     }
   }
 
@@ -976,7 +994,7 @@ export class AppController {
    */
   async unrejectLink(key: unknown, url: unknown): Promise<AppSnapshot> {
     const link = str(url);
-    if (!link || link.length > 2048) throw new Error('That page address is not valid.');
+    if (!link || link.length > 2048) throw translatedError((m) => m.main.invalidAddress);
     const prefs = this.state.linkPrefs[str(key)];
     if (prefs) restoreLink(prefs, link);
     return this.commit();
@@ -986,7 +1004,7 @@ export class AppController {
     const stash = this.lastRejected;
     const k = str(key);
     const link = str(url);
-    if (!stash || stash.key !== k || linkKey(stash.url) !== linkKey(link)) throw new Error("That link can't be put back any more. Add it again under the creator.");
+    if (!stash || stash.key !== k || linkKey(stash.url) !== linkKey(link)) throw translatedError((m) => m.main.cantPutBack);
     restoreLink(this.prefs(k), link);
     for (const [creator, remotes] of stash.removed) creator.remotes.push(...remotes);
     this.lastRejected = undefined;
@@ -1000,7 +1018,7 @@ export class AppController {
     if (!this.state.settings.privateLinks) return openUrl(link);
     const browsers = await installedBrowsers();
     const browser = browsers.find((b) => b.id === this.state.settings.privateBrowser) ?? browsers[0];
-    if (!browser) throw new Error('No browser with a private mode was found. Turn off private links in Settings.');
+    if (!browser) throw translatedError((m) => m.main.noPrivateBrowser);
     await openPrivate(browser.id, link);
   }
 
@@ -1009,15 +1027,16 @@ export class AppController {
     if (!/^https?:\/\//i.test(link)) return;
     const report = (err: unknown): void => this.emit({ type: 'error', message: (err as Error).message });
     const browsers = await installedBrowsers();
+    const m = t().main;
     const template: MenuItemConstructorOptions[] = [
-      { label: 'Open in browser', click: () => void openUrl(link).catch(report) },
+      { label: m.openInBrowser, click: () => void openUrl(link).catch(report) },
       ...(browsers.length ? [{ type: 'separator' } as const] : []),
       ...browsers.map((b) => ({
-        label: `Open in ${b.privateLabel} — ${b.name}${b.isDefault ? ' (default)' : ''}`,
+        label: `${m.openIn(m.privateMode[b.privateMode], b.name)}${b.isDefault ? t().common.defaultBrowser : ''}`,
         click: () => void openPrivate(b.id, link).catch(report),
       })),
       { type: 'separator' },
-      { label: 'Copy link', click: () => clipboard.writeText(link) },
+      { label: m.copyLink, click: () => clipboard.writeText(link) },
     ];
     Menu.buildFromTemplate(template).popup(this.window ? { window: this.window } : {});
   }
@@ -1026,11 +1045,11 @@ export class AppController {
     let dir = this.backupRoot;
     if (typeof installId === 'string') {
       const record = this.state.installs.find((i) => i.id === installId);
-      if (!record || record.undoneAt) throw new Error('That backup no longer exists.');
+      if (!record || record.undoneAt) throw translatedError((m) => m.main.backupGone);
       dir = record.backupDir;
     }
     // Only ever open folders inside the backups folder.
-    if (relative(this.backupRoot, dir).startsWith('..')) throw new Error('Not a backup folder.');
+    if (relative(this.backupRoot, dir).startsWith('..')) throw translatedError((m) => m.main.notBackupFolder);
     await mkdir(dir, { recursive: true });
     await openFolder(dir);
   }
@@ -1097,12 +1116,13 @@ export class AppController {
       fresh.unshift(`WickedWhims v${core.latestVersion}`);
     }
     if (!fresh.length || !Notification.isSupported() || this.window?.isFocused()) return;
+    const m = t().main;
     const notification = new Notification({
-      title: fresh.length === 1 ? 'Update available' : `${fresh.length} updates available`,
+      title: m.notifyTitle(fresh.length),
       // Windows keeps notification history, so names are opt-in.
       body: this.state.settings.notificationNames
-        ? fresh.slice(0, 5).join(', ') + (fresh.length > 5 ? `, +${fresh.length - 5} more` : '')
-        : 'Open WhimWatch to see what changed.',
+        ? fresh.slice(0, 5).join(', ') + (fresh.length > 5 ? `, ${m.notifyMore(fresh.length - 5)}` : '')
+        : m.notifyOpen,
     });
     notification.on('click', () => {
       this.window?.show();

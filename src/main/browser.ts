@@ -6,6 +6,7 @@ import {
   HostQueue,
   type HttpResponse,
   isChallengePage,
+  LoadTimeoutError,
   politeGap,
   VerificationRequiredError,
 } from '../core/fetcher.js';
@@ -364,7 +365,7 @@ export class BrowserPool implements SiteBrowser {
       // VerificationRequiredError and hold the site back.
       if (page.loading && !isChallengePage(page.html)) {
         wc.stop();
-        throw new Error(`Timed out loading ${url}`);
+        throw new LoadTimeoutError(url);
       }
       if (isChallengePage(page.html)) wc.stop();
       return { status: status || 200, url: wc.getURL(), body: page.html, headers: {} };
@@ -436,7 +437,7 @@ function navigate(wc: WebContents, url: string): Promise<void> {
     const timer = setTimeout(() => {
       cleanup();
       wc.stop();
-      reject(new Error(`Timed out loading ${url}`));
+      reject(new LoadTimeoutError(url));
     }, LOAD_TIMEOUT_MS);
     wc.on('dom-ready', onReady);
     wc.on('did-fail-load', onFail);

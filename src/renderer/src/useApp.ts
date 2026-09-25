@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AppSnapshot, BatchState, BrowserSite, UpdateProgress } from '../../shared/api';
+import { getLocale, LOCALE_INFO, setLocale } from '../../shared/i18n';
 import type { CheckProgress, CreatorResult } from '../../shared/types';
 
 export const api = window.whimwatch;
+
+/** Before the snapshot renders: its text is read from t() while rendering, in the language it names. */
+function applyLocale(snapshot: AppSnapshot): void {
+  setLocale(snapshot.locale);
+  // Screen readers pick their voice by it, and it's what the page is written in.
+  document.documentElement.lang = LOCALE_INFO[getLocale()].intl;
+}
 
 export interface AppModel {
   snapshot?: AppSnapshot;
@@ -32,6 +40,7 @@ export function useApp(): AppModel {
 
   useEffect(() => {
     void api.getSnapshot().then((s) => {
+      applyLocale(s);
       setSnapshot(s);
       setBatch(s.batch);
       if (s.running) setProgress(s.progress);
@@ -39,6 +48,7 @@ export function useApp(): AppModel {
     return api.onEvent((event) => {
       switch (event.type) {
         case 'snapshot':
+          applyLocale(event.snapshot);
           setSnapshot(event.snapshot);
           if (!event.snapshot.running) {
             setProgress(undefined);

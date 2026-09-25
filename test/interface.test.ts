@@ -3,7 +3,8 @@ import { runBatch } from '../src/core/batch.js';
 import type { AppSnapshot } from '../src/shared/api.js';
 import type { CoreResult, CreatorResult, InstallRecord, RemoteInfo, SeenEvent } from '../src/shared/types.js';
 import { rowAction, rowStatus, rowSummary, sortCreators, updateCandidates } from '../src/renderer/src/eligibility.js';
-import { acceleratorFromKey, acceleratorKeys, formatCount, plural, pageLabel, shortTitle, timeAgo } from '../src/renderer/src/format.js';
+import { acceleratorFromKey, acceleratorKeys, formatCount, pageLabel, shortTitle, timeAgo } from '../src/renderer/src/format.js';
+import { t } from '../src/shared/i18n/index.js';
 import { gameHealth } from '../src/renderer/src/health.js';
 import { plainTitle } from '../src/shared/labels.js';
 import { dayLabel, fileCounts, historyItems, isUndone, matchesFilter } from '../src/renderer/src/history.js';
@@ -189,8 +190,8 @@ describe('wording and shortcuts', () => {
     expect(timeAgo(NOW - 350 * DAY, NOW)).toBe('11 months ago');
     expect(timeAgo(NOW - 1.9 * DAY, NOW)).toBe('yesterday');
     expect(formatCount(3812)).toBe('3,812');
-    expect(plural(1, 'file')).toBe('1 file');
-    expect(plural(2, 'match', 'matches')).toBe('2 matches');
+    expect(t().common.files(1)).toBe('1 file');
+    expect(t().otherFiles.matches(2)).toBe('2 matches');
   });
 
   it('shortens a long page name without cutting a character in half', () => {

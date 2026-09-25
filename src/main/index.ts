@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, globalShortcut, Menu, nativeTheme, session, shell } from 'electron';
 import { loadState } from '../core/store.js';
 import { APP_ID } from '../shared/config.js';
+import { englishMessage } from '../shared/i18n/index.js';
 import { AppController } from './controller.js';
 import { configureSiteSessions, denyPermissions, sessionsToClear } from './browser.js';
 import { registerIpc } from './ipc.js';
@@ -99,7 +100,7 @@ if (process.argv.includes('--smoke')) {
       const forgetEverything = settings.clearBrowsingDataOnExit && settings.forgetSignInsOnExit;
       configureSiteSessions({ persist: !forgetEverything });
       if (settings.clearBrowsingDataOnExit) {
-        await wipeSiteDataOnDisk(userData, !settings.forgetSignInsOnExit).catch((err: Error) => console.warn('Privacy cleanup failed:', err.message));
+        await wipeSiteDataOnDisk(userData, !settings.forgetSignInsOnExit).catch((err: Error) => console.warn('Privacy cleanup failed:', englishMessage(err)));
       }
     }
     const controller = await AppController.create(statePath, join(userData, 'backups'));
@@ -108,7 +109,7 @@ if (process.argv.includes('--smoke')) {
     controller.updatesBusy = () => updater.isBusy();
     // Housekeeping before anything else can start an update.
     await updater.clearLeftoverDownloads().catch(() => undefined);
-    await controller.pruneBackups().catch((err: Error) => console.warn('Backup cleanup failed:', err.message));
+    await controller.pruneBackups().catch((err: Error) => console.warn('Backup cleanup failed:', englishMessage(err)));
     registerIpc(controller, updater, isTrustedUrl);
 
     controller.applyTheme();
@@ -123,7 +124,7 @@ if (process.argv.includes('--smoke')) {
     try {
       controller.applyQuickHide();
     } catch (err) {
-      console.warn('Quick hide shortcut unavailable:', (err as Error).message);
+      console.warn('Quick hide shortcut unavailable:', englishMessage(err));
     }
     app.on('will-quit', () => globalShortcut.unregisterAll());
     app.on('before-quit', () => {
@@ -144,7 +145,7 @@ if (process.argv.includes('--smoke')) {
       // lock, so it couldn't be opened again). The next launch removes leftovers from disk anyway.
       const giveUp = new Promise<void>((resolve) => setTimeout(resolve, 10_000));
       void Promise.race([
-        clearSiteBrowsingData(sessionsToClear(), !forgetSignInsOnExit).catch((err: Error) => console.warn('Clearing browsing data failed:', err.message)),
+        clearSiteBrowsingData(sessionsToClear(), !forgetSignInsOnExit).catch((err: Error) => console.warn('Clearing browsing data failed:', englishMessage(err))),
         giveUp,
       ]).finally(() => app.quit());
     });

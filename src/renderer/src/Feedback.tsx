@@ -1,6 +1,7 @@
 import { ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { type IssueForm, newIssueUrl } from '../../shared/config';
+import { getLocale, t } from '../../shared/i18n';
 import { Dialog } from './dialog';
 import { useToast } from './toast';
 import { api, type AppModel } from './useApp';
@@ -19,15 +20,9 @@ export function openIssueForm(app: AppModel, form: IssueForm): void {
   void app.run(() => api.openExternal(newIssueUrl(form, fields)));
 }
 
-const COPY: Record<ReportForm, { title: string; intro: string }> = {
-  bug_report: {
-    title: 'Report a bug',
-    intro: 'The bug report form opens on GitHub. Diagnostics help a lot: copy them, then paste them into the form’s Diagnostics field.',
-  },
-  site_changed: {
-    title: 'Report a site problem',
-    intro: 'For when a site (wicked.cc, LoversLab, Patreon or the WickedWhims page) stops being read, usually after a redesign. Copy the diagnostics, then paste them into the form.',
-  },
+const copy = (form: ReportForm): { title: string; intro: string } => {
+  const m = t().feedback;
+  return form === 'bug_report' ? { title: m.bugTitle, intro: m.bugIntro } : { title: m.siteTitle, intro: m.siteIntro };
 };
 
 /**
@@ -37,6 +32,7 @@ const COPY: Record<ReportForm, { title: string; intro: string }> = {
 export function ReportDialog({ form, app, onClose }: { form: ReportForm; app: AppModel; onClose: () => void }) {
   const toast = useToast();
   const [text, setText] = useState<string>();
+  const m = t().feedback;
 
   useEffect(() => {
     let live = true;
@@ -48,8 +44,8 @@ export function ReportDialog({ form, app, onClose }: { form: ReportForm; app: Ap
 
   return (
     <Dialog
-      title={COPY[form].title}
-      subtitle={COPY[form].intro}
+      title={copy(form).title}
+      subtitle={copy(form).intro}
       onClose={onClose}
       width={720}
       footer={
@@ -61,7 +57,7 @@ export function ReportDialog({ form, app, onClose }: { form: ReportForm; app: Ap
               onClose();
             }}
           >
-            Open the form without diagnostics
+            {m.withoutDiagnostics}
           </Button>
           <span className="spacer" />
           <Button
@@ -71,25 +67,25 @@ export function ReportDialog({ form, app, onClose }: { form: ReportForm; app: Ap
             onClick={async () => {
               await app.run(() => api.copyDiagnostics());
               openIssueForm(app, form);
-              toast({ text: 'Diagnostics copied. Paste them into the form.' });
+              toast({ text: m.copiedPaste });
               onClose();
             }}
           >
-            Copy diagnostics and open the form
+            {m.copyAndOpen}
           </Button>
         </>
       }
     >
       <p className="muted small">
-        This is exactly what gets copied. It has no creator names or page addresses, and your home folder shows as ~. Add anything else
-        you’re comfortable sharing in the form.
+        {m.whatGetsCopied}
+        {getLocale() !== 'en' && ` ${m.englishNote}`}
       </p>
       {text === undefined ? (
         <p className="muted row-center">
-          <Spinner /> Gathering diagnostics…
+          <Spinner /> {m.gathering}
         </p>
       ) : (
-        <textarea className="diagnostics mono" readOnly value={text} rows={12} spellCheck={false} aria-label="Diagnostics text" />
+        <textarea className="diagnostics mono" readOnly value={text} rows={12} spellCheck={false} aria-label={t().settings.diagnosticsText} lang="en" />
       )}
     </Dialog>
   );

@@ -1,21 +1,12 @@
 import { BookOpen, Bug, CircleQuestionMark, History, Info, Lightbulb, RefreshCw, Search, Settings as SettingsIcon, Sparkles, X } from 'lucide-react';
 import type { RefObject } from 'react';
 import { docsUrl } from '../../shared/config';
-import type { CheckProgress } from '../../shared/types';
+import { t } from '../../shared/i18n';
 import { openIssueForm, type ReportForm } from './Feedback';
-import { formatCount } from './format';
 import { api, type AppModel } from './useApp';
 import { Button, IconButton, Kbd, LogoMark, MenuButton, Spinner } from './ui';
 
 export type View = 'home' | 'history' | 'settings';
-
-const PHASE_LABEL: Record<CheckProgress['phase'], string> = {
-  scan: 'Reading your mods',
-  directory: 'Reading the creator list',
-  discover: 'Finding creator pages',
-  check: 'Checking pages',
-  done: 'Finishing',
-};
 
 export function Header({
   app,
@@ -42,10 +33,11 @@ export function Header({
   const progress = app.progress;
   const batch = app.batch;
   const finished = batch?.items.filter((i) => i.state === 'done' || i.state === 'failed').length ?? 0;
+  const m = t().header;
 
   return (
     <header className="topbar">
-      <button type="button" className="brand" onClick={() => onView('home')} aria-label="WhimWatch, back to creators">
+      <button type="button" className="brand" onClick={() => onView('home')} aria-label={m.backToCreators}>
         <LogoMark />
         <span>WhimWatch</span>
       </button>
@@ -60,34 +52,32 @@ export function Header({
           <button
             type="button"
             className="chip-main"
-            title={`You have WhimWatch ${snapshot.appVersion}. Version ${snapshot.appUpdate.version} is out — opens the download page.`}
+            title={m.appUpdateTitle(snapshot.appVersion, snapshot.appUpdate.version)}
             onClick={() => app.run(() => api.openExternal(snapshot.appUpdate!.url))}
           >
             <Sparkles size={14} aria-hidden="true" />
-            <span className="chip-text">Update WhimWatch to {snapshot.appUpdate.version}</span>
+            <span className="chip-text">{m.appUpdate(snapshot.appUpdate.version)}</span>
           </button>
-          <IconButton label="Hide this update notice" icon={X} size={13} onClick={() => app.run(() => api.dismissAppUpdate(snapshot.appUpdate!.version))} />
+          <IconButton label={m.hideAppUpdate} icon={X} size={13} onClick={() => app.run(() => api.dismissAppUpdate(snapshot.appUpdate!.version))} />
         </span>
       )}
       {batch?.running && (
         <button type="button" className="chip chip-main chip-accent" onClick={onShowBatch}>
           <Spinner size={14} />
-          <span className="chip-text">
-            Updating {Math.min(finished + 1, batch.items.length)} of {batch.items.length}
-          </span>
+          <span className="chip-text">{m.updatingNofM(Math.min(finished + 1, batch.items.length), batch.items.length)}</span>
         </button>
       )}
 
       <span className="spacer" />
 
       {view === 'home' && (
-        <label className="search collapsible" title="Search creators or files (/)">
+        <label className="search collapsible" title={m.searchTitle}>
           <Search size={15} aria-hidden="true" />
           <input
             ref={searchRef}
             type="search"
-            placeholder="Search creators or files"
-            aria-label="Search creators or files"
+            placeholder={m.search}
+            aria-label={m.search}
             value={query}
             onChange={(e) => onQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -108,49 +98,45 @@ export function Header({
         icon={History}
         className={view === 'history' ? 'active' : ''}
         aria-pressed={view === 'history'}
-        aria-label="History"
-        title="History"
+        aria-label={t().common.history}
+        title={t().common.history}
         onClick={() => onView(view === 'history' ? 'home' : 'history')}
       >
-        <span className="btn-label">History</span>
+        <span className="btn-label">{t().common.history}</span>
       </Button>
 
       {snapshot.running ? (
         <>
           <div className="check-progress" role="status" aria-live="polite">
             <div className="check-progress-text">
-              <span>{progress ? PHASE_LABEL[progress.phase] : 'Starting'}</span>
-              {progress && progress.total > 0 && (
-                <span>
-                  {formatCount(progress.done)} of {formatCount(progress.total)}
-                </span>
-              )}
+              <span>{progress ? m.phase[progress.phase] : m.starting}</span>
+              {progress && progress.total > 0 && <span>{m.progress(progress.done, progress.total)}</span>}
             </div>
             <div className={`bar ${progress?.total ? '' : 'indeterminate'}`}>
               <span style={progress?.total ? { width: `${Math.round((progress.done / progress.total) * 100)}%` } : undefined} />
             </div>
           </div>
           <Button icon={X} onClick={() => app.run(() => api.cancelCheck())}>
-            Cancel
+            {t().common.cancel}
           </Button>
         </>
       ) : (
-        <Button icon={RefreshCw} onClick={() => app.run(() => api.startCheck())} title="Check for updates (Ctrl+R)" disabled={batch?.running}>
-          Check now
+        <Button icon={RefreshCw} onClick={() => app.run(() => api.startCheck())} title={m.checkNowTitle} disabled={batch?.running}>
+          {t().common.checkNow}
         </Button>
       )}
 
       <MenuButton
-        label="Help"
+        label={m.help}
         icon={CircleQuestionMark}
         items={[
-          { label: 'Guide and FAQ', icon: BookOpen, onSelect: () => void app.run(() => api.openExternal(docsUrl())) },
-          { label: 'Report a bug…', icon: Bug, onSelect: () => onReport('bug_report') },
-          { label: 'Suggest a feature', icon: Lightbulb, onSelect: () => openIssueForm(app, 'feature_request') },
-          { label: 'More help and feedback', icon: Info, onSelect: onHelpPage },
+          { label: m.guide, icon: BookOpen, onSelect: () => void app.run(() => api.openExternal(docsUrl())) },
+          { label: m.reportBug, icon: Bug, onSelect: () => onReport('bug_report') },
+          { label: m.suggestFeature, icon: Lightbulb, onSelect: () => openIssueForm(app, 'feature_request') },
+          { label: m.moreHelp, icon: Info, onSelect: onHelpPage },
         ]}
       />
-      <IconButton label="Settings" icon={SettingsIcon} className={view === 'settings' ? 'active' : ''} onClick={() => onView('settings')} />
+      <IconButton label={t().common.settings} icon={SettingsIcon} className={view === 'settings' ? 'active' : ''} onClick={() => onView('settings')} />
     </header>
   );
 }

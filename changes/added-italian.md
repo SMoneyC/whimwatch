@@ -1,0 +1,1 @@
+- WhimWatch is available in Italian. It follows your system's language, and Settings → General → Language picks one yourself. Diagnostics stay in English, so bug reports can be read.

@@ -1,41 +1,34 @@
 import { dateFormat, formatShortDate } from '../../shared/dates';
+import { count, dateTimeFormat, numberFormat, relativeTimeFormat } from '../../shared/i18n/format';
+import { t } from '../../shared/i18n';
+import { describeProblem } from '../../shared/problems';
 import type { RemoteInfo } from '../../shared/types';
 import { formatVersion } from '../../shared/version';
 
 export { formatShortDate } from '../../shared/dates';
 export { SOURCE_LABEL } from '../../shared/labels';
 
-const utcDateFormat = new Intl.DateTimeFormat('en', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
-const timeFormat = new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit' });
-const relative = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
-const numbers = new Intl.NumberFormat('en');
-
 export function formatDate(t?: number): string {
-  return t === undefined ? '—' : dateFormat.format(new Date(t));
+  return t === undefined ? '—' : dateFormat().format(new Date(t));
 }
 
 /** For values that are a calendar date without a time (stored as UTC midnight), e.g. a release day. */
 export function formatCalendarDate(t?: number): string {
-  return t === undefined ? '—' : utcDateFormat.format(new Date(t));
+  return t === undefined ? '—' : dateTimeFormat({ year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(t));
 }
 
 export function formatTime(t: number): string {
-  return timeFormat.format(new Date(t));
+  return dateTimeFormat({ hour: 'numeric', minute: '2-digit' }).format(new Date(t));
 }
 
-export function formatCount(n: number): string {
-  return numbers.format(n);
-}
-
-export function plural(n: number, word: string, pluralWord = `${word}s`): string {
-  return `${formatCount(n)} ${n === 1 ? word : pluralWord}`;
-}
+/** 3812 → "3,812" (or "3.812", as the language groups digits). */
+export const formatCount = count;
 
 /** "just now", "12 minutes ago", "3 hours ago", "yesterday", "2 weeks ago"… */
-export function timeAgo(t: number, now = Date.now()): string {
-  const seconds = (t - now) / 1000;
+export function timeAgo(at: number, now = Date.now()): string {
+  const seconds = (at - now) / 1000;
   const abs = Math.abs(seconds);
-  if (abs < 60) return 'just now';
+  if (abs < 60) return t().time.justNow;
   const steps: [Intl.RelativeTimeFormatUnit, number][] = [
     ['minute', 60],
     ['hour', 3600],
@@ -49,7 +42,7 @@ export function timeAgo(t: number, now = Date.now()): string {
   // Up to 5 weeks read better as weeks than as "1 month".
   if (unit[0] === 'month' && abs < 5 * 604800) unit = steps[3]!;
   // Whole units gone by, as "ago" is counted: 6 years and 7 months is "6 years ago", not 7.
-  return relative.format(Math.trunc(seconds / unit[1]), unit[0]);
+  return relativeTimeFormat(unit[0]).format(Math.trunc(seconds / unit[1]), unit[0]);
 }
 
 export function remoteSummary(r: RemoteInfo): string {
@@ -58,9 +51,12 @@ export function remoteSummary(r: RemoteInfo): string {
     if (r.version) parts.push(formatVersion(r.version));
     return parts.join(' · ');
   }
-  if (r.status === 'needs-verification') return 'Wants a human check';
-  if (r.status === 'not-found') return 'Page not found';
-  return r.error ?? "Couldn't check";
+  const m = t().remote;
+  if (r.status === 'needs-verification') return m.wantsHumanCheck;
+  if (r.status === 'not-found') return m.notFound;
+  // Saved English words: from a version before codes (until the next check replaces them), or for
+  // a code this version doesn't know.
+  return (r.problem && describeProblem(r.problem)) || r.error || m.couldntCheck;
 }
 
 export function fileName(path: string): string {
@@ -74,7 +70,7 @@ export function shortTitle(title: string, max = 34): string {
 }
 
 export function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
+  if (n < 1024) return `${count(n)} B`;
   const units = ['KB', 'MB', 'GB', 'TB'];
   let value = n / 1024;
   let unit = 0;
@@ -82,7 +78,8 @@ export function formatBytes(n: number): string {
     value /= 1024;
     unit++;
   }
-  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
+  const digits = value < 10 ? 1 : 0;
+  return `${numberFormat({ minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value)} ${units[unit]}`;
 }
 
 /** Electron accelerator → keys to show, e.g. "CommandOrControl+Shift+H" → ["Ctrl", "Shift", "H"]. */
@@ -129,11 +126,11 @@ export function pageLabel(url: string, hideTitles: boolean): string {
   try {
     parsed = new URL(url);
   } catch {
-    return 'A page';
+    return t().remote.aPage;
   }
   const host = parsed.hostname.replace(/^www\./, '');
   const site = host === 'wicked.cc' ? 'wicked.cc' : host === 'loverslab.com' ? 'LoversLab' : host === 'patreon.com' ? 'Patreon' : host;
-  if (hideTitles) return `A ${site} page`;
+  if (hideTitles) return t().remote.aSitePage(site);
   const parts = parsed.pathname.split('/').filter(Boolean).map((p) => {
     try {
       return decodeURIComponent(p);

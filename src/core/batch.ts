@@ -1,3 +1,4 @@
+import { t } from '../shared/i18n/index.js';
 import type { BatchState } from '../shared/api.js';
 import { CancelledError } from './fetcher.js';
 
@@ -37,7 +38,7 @@ export async function runBatch(
     } catch (err) {
       if (err instanceof CancelledError) {
         item.state = 'cancelled';
-        item.message = 'Cancelled';
+        item.message = t().updater.cancelled;
         break;
       }
       item.state = 'failed';

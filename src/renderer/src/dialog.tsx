@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { t } from '../../shared/i18n';
 import { Button, IconButton } from './ui';
 
 /** Open dialogs, topmost last: only the top one reacts to Escape and keeps focus. */
@@ -94,7 +95,7 @@ export function Dialog({
             <h2 id={`${id}-title`}>{title}</h2>
             {subtitle && <p className="muted">{subtitle}</p>}
           </div>
-          <IconButton label="Close" icon={X} onClick={onClose} disabled={!dismissable} />
+          <IconButton label={t().common.close} icon={X} onClick={onClose} disabled={!dismissable} />
         </header>
         <div className="dialog-body">{children}</div>
         {footer && <footer className="dialog-foot">{footer}</footer>}
@@ -108,6 +109,8 @@ interface ConfirmOptions {
   title: string;
   body: ReactNode;
   confirmLabel: string;
+  /** Cancel by default. */
+  cancelLabel?: string;
   danger?: boolean;
 }
 
@@ -133,7 +136,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <>
               <span className="spacer" />
               <Button variant="quiet" onClick={() => finish(false)}>
-                Cancel
+                {pending.cancelLabel ?? t().common.cancel}
               </Button>
               <Button variant={pending.danger ? 'danger' : 'primary'} onClick={() => finish(true)} data-autofocus>
                 {pending.confirmLabel}

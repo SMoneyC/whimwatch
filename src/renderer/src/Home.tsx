@@ -1,11 +1,12 @@
 import { AlertTriangle, ArrowDownUp, ArrowUpCircle, Boxes, CheckCircle2, Download, Info, ShieldCheck } from 'lucide-react';
 import { type KeyboardEvent, useMemo, useRef, useState } from 'react';
 import type { BrowserSite } from '../../shared/api';
+import { t } from '../../shared/i18n';
 import type { CreatorResult } from '../../shared/types';
 import { CreatorList, type Row } from './CreatorList';
 import { useConfirm } from './dialog';
-import { AFTER_CHECK, CORE_KEY, rowStatus, sortCreators, type SortOrder, updateCandidates } from './eligibility';
-import { formatCount, plural, SOURCE_LABEL, timeAgo } from './format';
+import { afterCheck, CORE_KEY, rowStatus, sortCreators, type SortOrder, updateCandidates } from './eligibility';
+import { formatCount, SOURCE_LABEL, timeAgo } from './format';
 import { OtherFilesDialog } from './OtherFiles';
 import { PlayCard } from './PlayCard';
 import type { UpdateTarget } from './UpdateDialog';
@@ -14,26 +15,12 @@ import { Banner, Button, Spinner } from './ui';
 
 type Filter = 'updates' | 'attention' | 'current' | 'all';
 
-const FILTERS: { id: Filter; label: string; icon: typeof ArrowUpCircle; match: (c: CreatorResult) => boolean }[] = [
-  { id: 'updates', label: 'Updates ready', icon: ArrowUpCircle, match: (c) => rowStatus(c) === 'update' },
-  { id: 'attention', label: 'Need a look', icon: AlertTriangle, match: (c) => ['verify', 'missing', 'failed'].includes(rowStatus(c)) },
-  { id: 'current', label: 'Up to date', icon: CheckCircle2, match: (c) => rowStatus(c) === 'current' },
-  { id: 'all', label: 'All creators', icon: Boxes, match: () => true },
+const FILTERS: { id: Filter; icon: typeof ArrowUpCircle; match: (c: CreatorResult) => boolean }[] = [
+  { id: 'updates', icon: ArrowUpCircle, match: (c) => rowStatus(c) === 'update' },
+  { id: 'attention', icon: AlertTriangle, match: (c) => ['verify', 'missing', 'failed'].includes(rowStatus(c)) },
+  { id: 'current', icon: CheckCircle2, match: (c) => rowStatus(c) === 'current' },
+  { id: 'all', icon: Boxes, match: () => true },
 ];
-
-const LIST_TITLE: Record<Filter, (n: number) => string> = {
-  updates: (n) => (n === 1 ? '1 update ready' : `${formatCount(n)} updates ready`),
-  attention: (n) => (n === 1 ? '1 needs a look' : `${formatCount(n)} need a look`),
-  current: (n) => `${formatCount(n)} up to date`,
-  all: (n) => plural(n, 'creator'),
-};
-
-const EMPTY: Record<Filter, string> = {
-  updates: "You're all caught up! Nothing to update.",
-  attention: 'Every creator has a working download page.',
-  current: 'Nothing is up to date yet.',
-  all: 'No WickedWhims animation packs found in your Mods folders.',
-};
 
 export function Home({
   app,
@@ -108,19 +95,20 @@ export function Home({
     setPicked(FILTERS[next]!.id);
   };
 
+  const m = t().home;
   const markAllSeen = async (): Promise<void> => {
     const ok = await confirm({
-      title: `Mark ${plural(updates, 'update')} as seen?`,
-      body: "They'll disappear from Updates and come back only if a newer release is posted. You can undo this from History.",
-      confirmLabel: 'Mark as seen',
+      title: m.markAllTitle(updates),
+      body: m.markAllBody,
+      confirmLabel: t().common.markAsSeen,
     });
     if (ok) await app.run(() => api.dismissAll());
   };
 
   const checkedText = running
-    ? 'Checking now · Thanks for waiting!'
+    ? m.checking
     : result
-      ? `${snapshot.firstCheckNotice ? 'First check' : 'Checked'} ${timeAgo(result.finishedAt)}`
+      ? (snapshot.firstCheckNotice ? m.firstChecked : m.checked)(timeAgo(result.finishedAt))
       : '';
 
   return (
@@ -134,10 +122,10 @@ export function Home({
         {!running && snapshot.checkMessage?.tone === 'error' && (
           <Banner
             tone="error"
-            title="The check didn't finish"
+            title={m.checkDidntFinish}
             actions={
               <Button size="sm" onClick={() => onReport('site_changed')}>
-                Report a site problem
+                {m.reportSiteProblem}
               </Button>
             }
           >
@@ -145,7 +133,7 @@ export function Home({
           </Banner>
         )}
 
-        <div className="counts" role="tablist" aria-label="Show creators">
+        <div className="counts" role="tablist" aria-label={m.showCreators}>
           {FILTERS.map((f, i) => {
             const IconComponent = f.icon;
             return (
@@ -167,7 +155,7 @@ export function Home({
                 </span>
                 <span className="count-text">
                   <span className="count-number">{formatCount(counts[f.id])}</span>
-                  <span className="count-label">{f.label}</span>
+                  <span className="count-label">{m.filter[f.id]}</span>
                 </span>
               </button>
             );
@@ -184,17 +172,15 @@ export function Home({
               <Info size={20} aria-hidden="true" />
             </span>
             <div className="first-check-copy">
-              <h2 id="first-check-title">Check complete; What's left below may be false positive updates.</h2>
-              <p className="muted">
-                WhimWatch compares each download page's date with your file dates, so packs you installed yourself might look older than they actually are. If you're fairly sure you're current, mark them all as seen. Anything released after today will still surface as an update.
-              </p>
+              <h2 id="first-check-title">{m.firstCheckTitle}</h2>
+              <p className="muted">{m.firstCheckBody}</p>
             </div>
             <div className="first-check-actions">
               <Button variant="primary" onClick={() => app.run(() => api.dismissAll())}>
-                Mark all as seen
+                {t().common.markAllAsSeen}
               </Button>
               <Button variant="quiet" onClick={() => app.run(() => api.dismissFirstCheckNotice())}>
-                Review them one by one
+                {m.reviewOneByOne}
               </Button>
             </div>
           </section>
@@ -204,18 +190,17 @@ export function Home({
           <Banner
             key={site}
             tone="warn"
-            title={`${SOURCE_LABEL[site]} wants a quick human check`}
+            title={m.verifyTitle(SOURCE_LABEL[site])}
             onClose={() => app.clearVerification(site)}
             actions={
               // The banner stays until the check is passed (or the user closes it), so a window
               // closed too early can be opened again.
               <Button size="sm" icon={ShieldCheck} onClick={() => app.run(() => api.showVerification(site))}>
-                Verify
+                {t().common.verify}
               </Button>
             }
           >
-            Complete the check in the window that opens. It closes itself once you're through, and WhimWatch
-            {running ? ' carries on with that site.' : " picks that site up again when you check."}
+            {m.verifyBody(running)}
           </Banner>
         ))}
 
@@ -223,44 +208,42 @@ export function Home({
           <Banner
             key={`passed-${site}`}
             tone="ok"
-            title={`${SOURCE_LABEL[site]} check passed`}
+            title={m.verifiedTitle(SOURCE_LABEL[site])}
             onClose={() => app.clearVerification(site)}
             actions={
               running ? undefined : (
                 <Button size="sm" icon={ArrowUpCircle} onClick={() => app.run(() => api.startCheck())}>
-                  Check again
+                  {t().common.checkAgain}
                 </Button>
               )
             }
           >
-            {running
-              ? `Carrying on with ${SOURCE_LABEL[site]}.`
-              : `Check again to pick up the ${SOURCE_LABEL[site]} pages that were skipped.`}
+            {running ? m.verifiedRunning(SOURCE_LABEL[site]) : m.verifiedIdle(SOURCE_LABEL[site])}
           </Banner>
         ))}
 
         {rows.length > 0 || running ? (
           <>
             <div className="list-head">
-              <h2>{LIST_TITLE[filter](visible.length)}</h2>
+              <h2>{m.listTitle[filter](visible.length)}</h2>
               <span className="spacer" />
               <label className="sort">
                 <ArrowDownUp size={15} aria-hidden="true" />
-                <span className="visually-hidden">Sort by</span>
+                <span className="visually-hidden">{m.sortBy}</span>
                 <select value={sort} onChange={(e) => setSort(e.target.value as SortOrder)}>
-                  <option value="newest">Newest release</option>
-                  <option value="outdated">Most out of date</option>
-                  <option value="name">Name</option>
+                  <option value="newest">{m.sort.newest}</option>
+                  <option value="outdated">{m.sort.outdated}</option>
+                  <option value="name">{m.sort.name}</option>
                 </select>
               </label>
               {filter === 'updates' && updates > 0 && !running && !app.batch?.running && (
                 <Button variant="quiet" onClick={markAllSeen}>
-                  Mark all as seen
+                  {t().common.markAllAsSeen}
                 </Button>
               )}
               {(candidates.eligible.length > 0 || app.batch?.running) && (
-                <Button variant="primary" icon={Download} onClick={onUpdateAll} disabled={running} title={running ? AFTER_CHECK : undefined}>
-                  {app.batch?.running ? 'Updating…' : `Update all ${formatCount(candidates.eligible.length)}`}
+                <Button variant="primary" icon={Download} onClick={onUpdateAll} disabled={running} title={running ? afterCheck() : undefined}>
+                  {app.batch?.running ? m.updating : m.updateAll(candidates.eligible.length)}
                 </Button>
               )}
             </div>
@@ -268,32 +251,32 @@ export function Home({
               <CreatorList rows={visible} app={app} onUpdate={onUpdate} />
             ) : query.trim() ? (
               <div className="empty card">
-                <p>No creators or files match "{query.trim()}"{filter !== 'all' ? ' here' : ''}.</p>
+                <p>{filter !== 'all' ? m.noMatchHere(query.trim()) : m.noMatch(query.trim())}</p>
                 {filter !== 'all' ? (
-                  <Button onClick={() => setPicked('all')}>Search all creators</Button>
+                  <Button onClick={() => setPicked('all')}>{m.searchAll}</Button>
                 ) : (
-                  <Button onClick={onClearQuery}>Clear search</Button>
+                  <Button onClick={onClearQuery}>{m.clearSearch}</Button>
                 )}
               </div>
             ) : running ? (
               <div className="empty card">
                 <Spinner size={22} />
-                <p>Updates will appear here as checks complete.</p>
+                <p>{m.appearAsChecked}</p>
               </div>
             ) : (
               <div className="empty card">
                 <CheckCircle2 size={22} className="mint" aria-hidden="true" />
-                <p>{EMPTY[filter]}</p>
-                {filter !== 'all' && counts.all > 0 && <Button onClick={() => setPicked('all')}>Show all creators</Button>}
+                <p>{m.empty[filter]}</p>
+                {filter !== 'all' && counts.all > 0 && <Button onClick={() => setPicked('all')}>{m.showAll}</Button>}
               </div>
             )}
           </>
         ) : (
           !result && (
             <div className="empty card">
-              <p>No results yet.</p>
+              <p>{m.noResults}</p>
               <Button variant="primary" onClick={() => app.run(() => api.startCheck())}>
-                Check now
+                {t().common.checkNow}
               </Button>
             </div>
           )
@@ -301,11 +284,9 @@ export function Home({
 
         {result && result.unrecognizedCount > 0 && (
           <footer className="other-line faint small">
-            {result.unrecognizedCount === 1
-              ? "1 other mod or CC file in your folders isn't a WickedWhims animation pack, so WhimWatch will leave it alone."
-              : `${formatCount(result.unrecognizedCount)} other mods and CC files in your folders aren't WickedWhims animation packs, so WhimWatch will leave them alone.`}{' '}
+            {m.otherFiles(result.unrecognizedCount)}{' '}
             <button type="button" className="link-btn" onClick={() => setShowOther(true)}>
-              Show them
+              {m.showThem}
             </button>
           </footer>
         )}

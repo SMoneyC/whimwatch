@@ -43,7 +43,8 @@
     "check-package": "tsx scripts/check-package.ts",
     "dist:dir": "electron-vite build && electron-builder --dir",
     "release": "tsx scripts/release.ts",
-    "check-changes": "tsx scripts/release.ts --check"
+    "check-changes": "tsx scripts/release.ts --check",
+    "locales": "tsx scripts/locales.ts"
   },
   "dependencies": {
     "7zip-bin": "5.2.0",

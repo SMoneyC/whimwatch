@@ -1,4 +1,5 @@
 import { formatShortDate } from './dates.js';
+import { t } from './i18n/index.js';
 import { SOURCE_LABEL } from './labels.js';
 import type { RemoteInfo, SourceId } from './types.js';
 
@@ -119,12 +120,12 @@ export function laterSources(remotes: RemoteInfo[], listingUrl: string): RemoteI
  * "Nothing new on wicked.cc" says nothing useful.
  */
 export function laterSourcesText(later: RemoteInfo[], now = Date.now(), checkedSource?: SourceId): string {
-  const name = (r: RemoteInfo): string => (r.listing.source === checkedSource ? `another ${SOURCE_LABEL[r.listing.source]} page` : SOURCE_LABEL[r.listing.source]);
+  const m = t().updater;
+  const name = (r: RemoteInfo): string => (r.listing.source === checkedSource ? m.anotherPage(SOURCE_LABEL[r.listing.source]) : SOURCE_LABEL[r.listing.source]);
   const [only] = later;
   if (!only) return '';
-  if (later.length === 1) return `${name(only)} was updated later, on ${formatShortDate(only.updatedAt, now)}`;
-  const parts = later.map((r) => `${name(r)} (${formatShortDate(r.updatedAt, now)})`);
-  return `${[parts.slice(0, -1).join(', '), parts.at(-1)].join(' and ')} were updated later`;
+  if (later.length === 1) return m.laterOne(name(only), formatShortDate(only.updatedAt, now));
+  return m.laterMany(later.map((r) => m.laterWithDate(name(r), formatShortDate(r.updatedAt, now))));
 }
 
 /**

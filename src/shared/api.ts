@@ -8,8 +8,12 @@ import type {
   SeenEvent,
   UpdateSite,
 } from './types.js';
+import type { LocaleId } from './i18n/locales.js';
 
 export type BrowserSite = 'loverslab' | 'patreon';
+
+/** What a browser calls its private mode: a private, Incognito or InPrivate window. */
+export type PrivateMode = 'private' | 'incognito' | 'inprivate';
 
 export interface AccountStatus {
   site: BrowserSite;
@@ -21,7 +25,7 @@ export interface AccountStatus {
 export interface LinkBrowser {
   id: string;
   name: string;
-  privateLabel: string;
+  privateMode: PrivateMode;
   isDefault: boolean;
 }
 
@@ -111,6 +115,10 @@ export interface AppSnapshot {
   /** The first check just finished: explain that hand-installed packs may look out of date. */
   firstCheckNotice: boolean;
   platform: 'win32' | 'darwin' | 'linux';
+  /** The language everything is shown in: the Language setting, or the system's when that's "system". */
+  locale: LocaleId;
+  /** The language "system" resolves to, named in the Language setting. */
+  systemLocale: LocaleId;
 }
 
 export interface PlannedFile {
@@ -138,6 +146,8 @@ export interface UpdatePlan {
   /** Files in the download that are not mods (readme etc.) and will be skipped. */
   skipped: string[];
   warnings: string[];
+  /** The Sims 4 was running when the plan was made: installing waits until it's closed. */
+  gameRunning?: boolean;
   /** Every downloaded mod file matches what's installed: nothing to update. */
   upToDate: boolean;
   /**

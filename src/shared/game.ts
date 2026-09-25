@@ -1,3 +1,4 @@
+import { t } from './i18n/index.js';
 import type { CoreResult, GameInfo } from './types.js';
 
 export interface GameWarning {
@@ -27,20 +28,9 @@ export function gameWarnings(game: GameInfo | undefined, core: CoreResult): Game
   if (!game) return [];
   const warnings: GameWarning[] = [];
   const gameVersion = game.version ?? 'unknown';
-  if (game.modsEnabled === false) {
-    warnings.push({
-      id: `mods-off:${gameVersion}`,
-      tone: 'error',
-      text: 'Mods are turned off in The Sims 4 (Game Options → Other → Enable Custom Content and Mods), so nothing in your Mods folder will load.',
-    });
-  }
-  if (game.scriptModsEnabled === false) {
-    warnings.push({
-      id: `script-mods-off:${gameVersion}`,
-      tone: 'error',
-      text: "Script mods are turned off in The Sims 4 (Game Options → Other → Script Mods Allowed), so WickedWhims won't load.",
-    });
-  }
+  const m = t().game;
+  if (game.modsEnabled === false) warnings.push({ id: `mods-off:${gameVersion}`, tone: 'error', text: m.modsOff });
+  if (game.scriptModsEnabled === false) warnings.push({ id: `script-mods-off:${gameVersion}`, tone: 'error', text: m.scriptModsOff });
 
   const supported = core.supportedGameVersions ?? [];
   if (game.version && supported.length) {
@@ -48,19 +38,15 @@ export function gameWarnings(game: GameInfo | undefined, core: CoreResult): Game
     const installed = game.version.split('.').slice(0, 3).join('.');
     const newest = [...supported].sort(compareVersions).at(-1)!;
     const oldest = [...supported].sort(compareVersions)[0]!;
-    const ww = core.latestVersion ? `WickedWhims v${core.latestVersion}` : 'WickedWhims';
+    const ww = m.wickedWhimsVersion(core.latestVersion);
     if (supported.includes(installed)) {
       // Supported.
     } else if (compareVersions(installed, newest) > 0) {
-      warnings.push({
-        id: `game-newer:${installed}`,
-        tone: 'warn',
-        text: `The Sims 4 was updated to ${installed}, but ${ww} only supports up to ${newest}. Script mods can break after a patch: consider waiting for a WickedWhims update before playing.`,
-      });
+      warnings.push({ id: `game-newer:${installed}`, tone: 'warn', text: m.newer(installed, ww, newest) });
     } else if (compareVersions(installed, oldest) < 0) {
-      warnings.push({ id: `game-older:${installed}`, tone: 'warn', text: `Your game version ${installed} is older than the oldest version ${ww} supports (${oldest}).` });
+      warnings.push({ id: `game-older:${installed}`, tone: 'warn', text: m.older(installed, ww, oldest) });
     } else {
-      warnings.push({ id: `game-unlisted:${installed}`, tone: 'warn', text: `Your game version ${installed} isn't on ${ww}'s supported list.` });
+      warnings.push({ id: `game-unlisted:${installed}`, tone: 'warn', text: m.unlisted(installed, ww) });
     }
   }
   return warnings;

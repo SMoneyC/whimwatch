@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { BrowserUnavailableError, isChallengePage, VerificationRequiredError } from '../fetcher.js';
 import { jsonLd, meta, str } from './html.js';
+import { problemFields } from '../../shared/problems.js';
 import type { SourceChecker } from './types.js';
 import { classifyUrl, parseDate, patreonVanity } from './urls.js';
 
@@ -107,12 +108,12 @@ export const checkLoversLab: SourceChecker = async (listing, fetcher) => {
   if (!fetcher.browserGet) throw new BrowserUnavailableError('LoversLab');
   const res = await fetcher.browserGet(listing.url);
   if (isChallengePage(res.body)) throw new VerificationRequiredError('LoversLab');
-  if (res.status === 404) return { status: 'not-found', error: 'File not found' };
-  if (res.status >= 400) return { status: 'error', error: `HTTP ${res.status}` };
+  if (res.status === 404) return { status: 'not-found', ...problemFields({ code: 'file-not-found' }) };
+  if (res.status >= 400) return { status: 'error', ...problemFields({ code: 'http', status: res.status }) };
   // LoversLab rewrites file slugs, but the numeric id must match what was asked for.
-  if (fileId(res.url) !== fileId(listing.url)) return { status: 'error', error: 'LoversLab showed a different page' };
+  if (fileId(res.url) !== fileId(listing.url)) return { status: 'error', ...problemFields({ code: 'different-page' }) };
   const file = parseLoversLabFile(res.body);
-  if (file.updatedAt === undefined) return { status: 'error', error: 'No update date on page', title: file.title };
+  if (file.updatedAt === undefined) return { status: 'error', ...problemFields({ code: 'no-date' }), title: file.title };
   return {
     updatedAt: file.updatedAt,
     version: file.version,

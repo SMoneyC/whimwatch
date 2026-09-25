@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { t } from '../../shared/i18n';
 import { acceleratorKeys } from './format';
 import { ConfirmProvider, dialogOpen } from './dialog';
 import { ReportDialog, type ReportForm } from './Feedback';
@@ -12,6 +13,7 @@ import { ToastProvider, useToast } from './toast';
 import { UpdateAllDialog } from './UpdateAllDialog';
 import { UpdateDialog, type UpdateTarget } from './UpdateDialog';
 import { api, type AppModel, useApp } from './useApp';
+import { rich } from './rich';
 import { Kbd, LogoMark } from './ui';
 
 export function App() {
@@ -48,8 +50,8 @@ function Shell() {
       api.onEvent((event) => {
         if (event.type === 'auto-installed') {
           toast({
-            text: `Installed ${event.count} update${event.count === 1 ? '' : 's'} automatically`,
-            action: { label: 'Undo', run: () => void app.run(() => api.undoBatch(event.batchId)) },
+            text: t().app.autoInstalled(event.count),
+            action: { label: t().common.undo, run: () => void app.run(() => api.undoBatch(event.batchId)) },
             duration: 12000,
           });
         }
@@ -132,19 +134,14 @@ function Shell() {
 /** Covers everything while the window isn't active (Settings → Privacy screen). */
 function PrivacyScreen({ app }: { app: AppModel }) {
   const settings = app.snapshot!.settings;
+  const m = t().app;
+  const keys = acceleratorKeys(settings.quickHideShortcut, app.snapshot!.platform).map((k) => <Kbd key={k}>{k}</Kbd>);
   return (
     <div className="privacy-screen" role="presentation">
       <LogoMark size={48} />
-      <strong>WhimWatch is hidden</strong>
-      <span className="muted">Click anywhere to show it again.</span>
-      {settings.quickHide && (
-        <span className="faint small row-center">
-          {acceleratorKeys(settings.quickHideShortcut, app.snapshot!.platform).map((k) => (
-            <Kbd key={k}>{k}</Kbd>
-          ))}{' '}
-          hides it instantly
-        </span>
-      )}
+      <strong>{m.hidden}</strong>
+      <span className="muted">{m.clickToShow}</span>
+      {settings.quickHide && <span className="faint small row-center">{rich(m.hidesInstantly, { keys })}</span>}
     </div>
   );
 }
@@ -186,7 +183,7 @@ function useWindowFocus(): boolean {
 
 function SkeletonHome() {
   return (
-    <div className="app" aria-busy="true" aria-label="Loading">
+    <div className="app" aria-busy="true" aria-label={t().common.loading}>
       <header className="topbar">
         <span className="brand">
           <LogoMark />

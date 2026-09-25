@@ -113,6 +113,50 @@ Each source lives in `src/core/sources/` and is tested against small hand-writte
 Downloads are separate. Public downloads go in `src/core/downloads.ts` and must be added to
 `isAllowedDownloadHost`. Downloads that need a signed-in session go in `src/main/downloads.ts`.
 
+## Translating WhimWatch
+
+The text WhimWatch shows is in [`src/shared/i18n/catalogs/`](src/shared/i18n/catalogs/): `en.ts`
+is the English original, and each other language has a file of its own. No coding
+experience is needed to improve a translation: Just edit the text between the quotes.
+
+**Improving a language that's there.** Open its file, find the message by its English in `en.ts`, and
+change the text. `npm run locales -- it` lists the messages a language doesn't have yet (in this example, Italian); Until they're translated, WhimWatch shows those in English.
+
+**Adding a language.**
+
+1. Copy `it.ts` to `<code>.ts`, using the language's two-letter code (`de.ts`, `pt.ts`), rename `const it` to
+   `const <code>` at the top, and translate. You can leave out messages you haven't done yet.
+2. Add the code to `LOCALE_IDS` and an entry to `LOCALE_INFO` in [`src/shared/i18n/locales.ts`](src/shared/i18n/locales.ts),
+   with the language's name itself ("Deutsch"), then add the catalogue to `CATALOGS` in
+   [`src/shared/i18n/index.ts`](src/shared/i18n/index.ts).
+3. Run `npm run lint && npm run typecheck && npm test`.
+
+**How messages work.** Most are plain text. Some take values and look like this:
+
+```ts
+checked: (ago: string) => `Checked ${ago}`,
+files: (n: number) => plural(n, { one: '# file', other: '# files' }),
+```
+
+Keep the `${…}` parts as they are and move them wherever your language puts them. For counts, give each
+form your language needs: `one`, `few`, `many` and so on, as [CLDR's plural rules](https://www.unicode.org/cldr/charts/latest/supplemental/language_plural_rules.html)
+list them; `#` is the number. `list(…)` joins names with your language's "and". Text like `{keys}` or
+`{setting}` marks a spot where WhimWatch puts a button or a keyboard key.
+
+**What not to translate.**
+
+- **Names:** sites, WickedWhims and The Sims 4 keep their names.
+- **Menus in other programs:** write them exactly as that program shows them in your language. For The
+  Sims 4's options, open Game Options → Other in your own game and copy the names from there. Patreon's
+  menus stay in English, because that's what its site shows.
+- **Bug-report material:** diagnostics, the log, the licenses, and the guide and issue forms on GitHub
+  stay in English, so whoever reads a bug report can understand it.
+
+**Catalogues are text only.** Translators can't be expected to read code, and reviewers may not read the
+language, so the lint rules for catalogues allow text, the parameters of a message and `count`, `plural`
+and `list` — nothing that could run. If `npm run lint` complains about a catalogue, rewrite the message as
+plain text rather than disabling the rule.
+
 ## Ground rules
 
 - Never commit `.package`, `.ts4script` or any other creator's files. Tests build synthetic packages

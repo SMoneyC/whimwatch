@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import type { ReadableStream } from 'node:stream/web';
 import type * as cheerio from 'cheerio';
 import { File as MegaFile } from 'megajs';
+import { translatedError } from '../shared/i18n/index.js';
 import type { RemoteInfo } from '../shared/types.js';
 import { ARCHIVE_FILE, MOD_FILE } from './archive.js';
 import { CancelledError, type Fetcher, throwIfCancelled, USER_AGENT } from './fetcher.js';
@@ -67,7 +68,7 @@ export async function fetchAllowed(url: string, headers: Record<string, string>,
   let current = url;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     if (!isAllowedDownloadHost(current)) {
-      throw new DownloadUnavailableError(`Downloads from ${hostOf(current)} aren't supported.`);
+      throw translatedError((m) => m.downloads.notSupportedHost(hostOf(current)), DownloadUnavailableError);
     }
     const res = await fetch(current, { headers: { 'User-Agent': USER_AGENT, ...headers }, redirect: 'manual', signal }).catch((err: Error) => {
       throw signal?.aborted ? new CancelledError() : err;
@@ -77,7 +78,7 @@ export async function fetchAllowed(url: string, headers: Record<string, string>,
     await res.body?.cancel();
     current = new URL(location, current).toString();
   }
-  throw new Error('Too many redirects.');
+  throw translatedError((m) => m.downloads.tooManyRedirects);
 }
 
 function hostOf(url: string): string {
@@ -116,7 +117,7 @@ export async function downloadWickedCc(remote: RemoteInfo, dir: string, fetcher:
     downloadUrl = parseWickedCcPage(page.body, page.url).downloadUrl;
     referer = page.url;
   }
-  if (!downloadUrl) throw new DownloadUnavailableError('wicked.cc has no download button on this page.');
+  if (!downloadUrl) throw translatedError((m) => m.downloads.noButton, DownloadUnavailableError);
 
   // /download/<id> redirects to files.wicked.cc, which only serves requests referred from the pack page.
   throwIfCancelled(signal);
@@ -131,13 +132,13 @@ export async function downloadHttp(
   signal?: AbortSignal,
 ): Promise<string> {
   const res = await fetchAllowed(url, headers, signal);
-  if (!res.ok || !res.body) throw new Error(`Download failed: HTTP ${res.status}`);
+  if (!res.ok || !res.body) throw translatedError((m) => m.downloads.failed(res.status));
   if ((res.headers.get('content-type') ?? '').includes('text/html')) {
     await res.body.cancel();
-    throw new DownloadUnavailableError('The site returned a web page instead of the file. Try downloading it in your browser.');
+    throw translatedError((m) => m.downloads.webPage, DownloadUnavailableError);
   }
   const total = Number(res.headers.get('content-length')) || undefined;
-  if (total && total > MAX_DOWNLOAD_BYTES) throw new Error('The download is too large.');
+  if (total && total > MAX_DOWNLOAD_BYTES) throw translatedError((m) => m.downloads.tooLarge);
 
   const name = fileNameFrom(res.headers.get('content-disposition'), res.url || url);
   await mkdir(dir, { recursive: true });
@@ -146,7 +147,7 @@ export async function downloadHttp(
   const counter = new Transform({
     transform(chunk: Buffer, _enc, done) {
       received += chunk.length;
-      if (received > MAX_DOWNLOAD_BYTES) return done(new Error('The download is too large.'));
+      if (received > MAX_DOWNLOAD_BYTES) return done(translatedError((m) => m.downloads.tooLarge));
       onProgress(received, total);
       done(null, chunk);
     },
@@ -174,7 +175,7 @@ export async function downloadExternal(url: string, dir: string, onProgress: Pro
   const host = new URL(url).hostname;
   if (host.startsWith('mega.')) return downloadMega(url, dir, onProgress, signal);
   const id = /\/file\/d\/([\w-]+)/.exec(url)?.[1] ?? new URL(url).searchParams.get('id');
-  if (!id) throw new DownloadUnavailableError('Unsupported Google Drive link. Open it in your browser.');
+  if (!id) throw translatedError((m) => m.downloads.driveLink, DownloadUnavailableError);
   return downloadHttp(`https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t`, dir, {}, onProgress, signal);
 }
 
@@ -182,13 +183,13 @@ async function downloadMega(url: string, dir: string, onProgress: ProgressFn, si
   let file = (await MegaFile.fromURL(url).loadAttributes()) as MegaFile;
   if (file.directory) {
     const candidates = (file.children ?? []).filter((c) => !c.directory && c.name && DOWNLOADABLE.test(c.name));
-    if (candidates.length !== 1) throw new DownloadUnavailableError('The Mega folder has several files. Open it in your browser.');
+    if (candidates.length !== 1) throw translatedError((m) => m.downloads.megaFolder, DownloadUnavailableError);
     file = candidates[0]!;
   }
   if (!file.name || !(ARCHIVE_FILE.test(file.name) || MOD_FILE.test(file.name))) {
-    throw new DownloadUnavailableError('The Mega link is not an archive or mod file.');
+    throw translatedError((m) => m.downloads.megaNotArchive, DownloadUnavailableError);
   }
-  if ((file.size ?? 0) > MAX_DOWNLOAD_BYTES) throw new Error('The download is too large.');
+  if ((file.size ?? 0) > MAX_DOWNLOAD_BYTES) throw translatedError((m) => m.downloads.tooLarge);
   await mkdir(dir, { recursive: true });
   const path = join(dir, safeFileName(file.name));
   let received = 0;
@@ -220,11 +221,11 @@ async function downloadMega(url: string, dir: string, onProgress: ProgressFn, si
 export function chooserDownloads(listed: readonly { href: string; name: string }[], only?: string, except: readonly string[] = []): string[] {
   if (only) {
     const file = listed.find((f) => f.name.toLowerCase() === only.toLowerCase());
-    if (!file) throw new DownloadUnavailableError(`${only} isn't on the LoversLab page any more. Open the page to check.`);
+    if (!file) throw translatedError((m) => m.downloads.fileGone(only), DownloadUnavailableError);
     return [file.href];
   }
   const left = new Set(except.map((n) => n.toLowerCase()));
   const files = listed.filter((f) => (!f.name || DOWNLOADABLE.test(f.name)) && !left.has(f.name.toLowerCase())).map((f) => f.href);
-  if (!files.length && left.size) throw new DownloadUnavailableError('This page only has files you set aside. Open the page to check.');
+  if (!files.length && left.size) throw translatedError((m) => m.downloads.onlySetAside, DownloadUnavailableError);
   return files;
 }

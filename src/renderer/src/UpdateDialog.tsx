@@ -1,12 +1,14 @@
 import { ArrowRightLeft, BellOff, CheckCircle2, Download, ExternalLink, FolderOpen, Gamepad2, Info, Minus, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { UpdatePlan } from '../../shared/api';
+import { t } from '../../shared/i18n';
 import type { UpdateSite } from '../../shared/types';
 import { laterSources, newestPage, outdatedRemotes } from '../../shared/updatable';
 import { formatVersion } from '../../shared/version';
 import { Dialog, useConfirm } from './dialog';
 import { CORE_KEY, downloadOptions } from './eligibility';
-import { fileName, formatBytes, formatCount, formatShortDate, plural, shortTitle, SOURCE_LABEL, timeAgo } from './format';
+import { fileName, formatBytes, formatShortDate, shortTitle, SOURCE_LABEL, timeAgo } from './format';
+import { rich } from './rich';
 import { useToast } from './toast';
 import { api, type AppModel } from './useApp';
 import { useSiteToggle } from './useSiteToggle';
@@ -22,8 +24,6 @@ export interface UpdateTarget {
   /** A new file on a page of theirs: download just this one, not the page's other files. */
   fileName?: string;
 }
-
-const isGameWarning = (w: string): boolean => w.startsWith('The Sims 4 is running');
 
 /** Beyond this many "not in this download" files, the list is folded away rather than scrolled past. */
 const OBSOLETE_SHOWN = 6;
@@ -51,8 +51,9 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
   const progress = app.updates[target.key];
   const snapshot = app.snapshot;
   const creator = snapshot?.lastResult?.creators.find((c) => c.key === target.key);
+  const m = t().update;
   /** The pack's own name where the site gives one and page titles aren't hidden. */
-  const packLabel = !target.packName || snapshot?.settings.hidePageTitles ? `a pack from ${target.name}` : shortTitle(target.packName, 40);
+  const packLabel = !target.packName || snapshot?.settings.hidePageTitles ? m.aPackFrom(target.name) : shortTitle(target.packName, 40);
 
   const chooseSource = (url: string): void => {
     if (url === (sourceUrl ?? plan?.downloadUrl)) return;
@@ -71,7 +72,7 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
         setPlan(p);
         // Files they left out before start unticked; everything else starts ticked.
         setSkip(p.startUnticked ?? []);
-        setGameOpen(p.warnings.some(isGameWarning));
+        setGameOpen(Boolean(p.gameRunning));
       },
       (err: Error) => !cancelled && setFailed(err.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')),
     );
@@ -106,8 +107,8 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
     if (!done) return;
     const record = [...done.installs].reverse().find((i) => i.creatorKey === target.key);
     toast({
-      text: newPack ? `Added ${packLabel}` : `Updated ${target.name}`,
-      action: record ? { label: 'Undo', run: () => void app.run(() => api.undoInstall(record.id)) } : undefined,
+      text: newPack ? m.added(packLabel) : m.updated(target.name),
+      action: record ? { label: t().common.undo, run: () => void app.run(() => api.undoInstall(record.id)) } : undefined,
     });
     onClose();
   };
@@ -123,7 +124,7 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
   const unchanged = plan?.files.filter((f) => f.unchanged) ?? [];
   const chosenReplace = replaceFiles.filter((f) => !skip.includes(f.target)).length;
   const chosenAdd = addFiles.filter((f) => !skip.includes(f.target)).length;
-  const otherWarnings = plan?.warnings.filter((w) => !isGameWarning(w)) ?? [];
+  const otherWarnings = plan?.warnings ?? [];
   const nothingChosen = chosenReplace + chosenAdd + remove.length === 0;
   /**
    * Only pages that are themselves behind. Ranked across every page, this named the creator's
@@ -146,8 +147,8 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
     const done = await app.run(() => api.rejectLink(target.key, r.listing.url));
     if (!done) return;
     toast({
-      text: `Removed that ${SOURCE_LABEL[r.listing.source]} page from ${target.name}`,
-      action: { label: 'Undo', run: () => void app.run(() => api.undoRejectLink(target.key, r.listing.url)) },
+      text: m.removedPage(SOURCE_LABEL[r.listing.source], target.name),
+      action: { label: t().common.undo, run: () => void app.run(() => api.undoRejectLink(target.key, r.listing.url)) },
     });
     close();
   };
@@ -155,20 +156,20 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
   const stopChecking = async (site: UpdateSite): Promise<void> => {
     const label = SOURCE_LABEL[site];
     const ok = await confirm({
-      title: `Stop checking ${label}?`,
-      body: `WhimWatch won't contact ${label} or show its updates for any creator. You can turn it back on in Settings → General.`,
-      confirmLabel: `Stop checking ${label}`,
+      title: m.stopTitle(label),
+      body: m.stopBody(label),
+      confirmLabel: m.stopConfirm(label),
     });
     if (ok) await toggleSite(site, false);
   };
 
   // "This replaces 1 file and adds 1." — the unit is named once.
   const changes = [
-    ['replaces', chosenReplace],
-    ['adds', chosenAdd],
-    ['removes', remove.length],
+    [m.replaces, chosenReplace],
+    [m.adds, chosenAdd],
+    [m.removes, remove.length],
   ] as const;
-  const summary = changes.filter(([, n]) => n > 0).map(([verb, n], i) => `${verb} ${i === 0 ? plural(n, 'file') : formatCount(n)}`);
+  const summary = changes.filter(([, n]) => n > 0).map(([verb, n], i) => verb(n, i === 0));
   const leftAlone = unchanged.length + (plan?.skipped.length ?? 0);
 
   const packPage = newPack ? creator?.remotes.find((r) => r.listing.url === target.listingUrl) : undefined;
@@ -177,16 +178,16 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
   // A new file on a page of theirs has its own date; the page's is their pack's.
   const postedAt = target.fileName ? packPage?.newFiles?.find((f) => f.name === target.fileName)?.updatedAt : packPage?.updatedAt;
   const subtitle = newPack
-    ? `From ${target.name}${postedAt !== undefined ? ` · Posted ${formatShortDate(postedAt)}` : ''}`
+    ? m.fromPosted(target.name, postedAt !== undefined ? formatShortDate(postedAt) : undefined)
     : target.key !== CORE_KEY && creator?.remoteUpdatedAt !== undefined
       ? // Against the files from this pack where the page named them, not the creator's newest file:
       // "you have files from Sep 17" under a pack you last updated in 2024 helps nobody.
-      `Update posted ${timeAgo(creator.remoteUpdatedAt)} · You have files from ${formatShortDate(behindPage?.yoursAt ?? creator.localUpdatedAt)}`
+      m.postedYouHave(timeAgo(creator.remoteUpdatedAt), formatShortDate(behindPage?.yoursAt ?? creator.localUpdatedAt))
       : undefined;
 
   return (
     <Dialog
-      title={newPack ? `Get ${packLabel}` : `Update ${target.name}`}
+      title={newPack ? m.getTitle(packLabel) : m.updateTitle(target.name)}
       subtitle={subtitle}
       onClose={close}
       dismissable={!installing}
@@ -195,17 +196,17 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
         <>
           {plan && !plan.upToDate && (
             <button type="button" className="link-btn accent" aria-expanded={showBackups} onClick={() => setShowBackups(!showBackups)}>
-              <Info size={15} aria-hidden="true" /> How backups work
+              <Info size={15} aria-hidden="true" /> {m.howBackups}
             </button>
           )}
           <span className="spacer" />
           <Button variant="quiet" onClick={close} disabled={installing}>
-            Cancel
+            {t().common.cancel}
           </Button>
           {plan?.upToDate && newPack ? (
             // Nothing to mark as seen: this page was never counted as an update in the first place.
             <Button variant="primary" onClick={close}>
-              Close
+              {t().common.close}
             </Button>
           ) : plan?.upToDate ? (
             <Button
@@ -218,7 +219,7 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
                 if (seen) close();
               }}
             >
-              {newerElsewhere ? 'Mark all as seen' : 'Mark as seen'}
+              {newerElsewhere ? t().common.markAllAsSeen : t().common.markAsSeen}
             </Button>
           ) : (
             <>
@@ -230,11 +231,11 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
                   }}
                   disabled={installing}
                 >
-                  Mark as seen
+                  {t().common.markAsSeen}
                 </Button>
               )}
               <Button variant="primary" icon={gameOpen ? Gamepad2 : Download} onClick={install} disabled={!plan || installing || gameOpen || nothingChosen}>
-                {installing ? 'Installing…' : gameOpen ? 'Close the game to install' : newPack ? 'Install pack' : onlyAdds ? 'Install new files' : 'Install update'}
+                {installing ? m.installing : gameOpen ? m.closeGame : newPack ? m.installPack : onlyAdds ? m.installNew : m.installUpdate}
               </Button>
             </>
           )}
@@ -242,10 +243,10 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
       }
     >
       <div className="source-bar">
-        <span className="muted">Download from</span>
+        <span className="muted">{m.downloadFrom}</span>
         {options.length > 1 ? (
           <Segmented
-            label="Download from"
+            label={m.downloadFrom}
             value={shownUrl}
             onChange={chooseSource}
             options={options.map((o) => ({
@@ -266,20 +267,20 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
             }))}
           />
         ) : (
-          <strong>{shownLabel ?? 'No available source'}</strong>
+          <strong>{shownLabel ?? m.noSource}</strong>
         )}
         {shownUrl && (
           <button
             type="button"
             className="link-btn accent"
-            title={`${shownUrl}\nRight-click for a private window`}
+            title={`${shownUrl}\n${m.rightClickPrivate}`}
             onClick={() => app.run(() => api.openExternal(shownUrl))}
             onContextMenu={(e) => {
               e.preventDefault();
               void app.run(() => api.showLinkMenu(shownUrl));
             }}
           >
-            Open page <ExternalLink size={14} aria-hidden="true" />
+            {t().common.openPage} <ExternalLink size={14} aria-hidden="true" />
           </button>
         )}
       </div>
@@ -287,21 +288,21 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
       {busy && (
         <div className="progress-block" role="status">
           <p className="row-center">
-            <Spinner /> {progress?.message ?? 'Preparing the download…'}
+            <Spinner /> {progress?.message ?? m.preparing}
           </p>
           <ProgressBar received={progress?.received} total={progress?.total} />
-          {!sourceUrl && options.length > 1 && <p className="faint small">Choosing the newest source with the most files.</p>}
+          {!sourceUrl && options.length > 1 && <p className="faint small">{m.choosingNewest}</p>}
         </div>
       )}
       {failed && (
-        <Banner tone="error" title="Couldn't prepare this update">
+        <Banner tone="error" title={m.couldntPrepare}>
           {failed}
         </Banner>
       )}
 
       {gameOpen && plan && !plan.upToDate && (
-        <Banner tone="error" title="The Sims 4 is open">
-          Close the game to install. WhimWatch checks again when you come back to this window.
+        <Banner tone="error" title={m.gameOpenTitle}>
+          {m.gameOpen}
         </Banner>
       )}
 
@@ -309,30 +310,30 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
         newerElsewhere ? (
           <Banner
             tone="info"
-            title={`Nothing new on this ${shownLabel ?? 'source'} page`}
+            title={m.nothingNewOn(shownLabel)}
             actions={
               newest &&
               (canGetNewest ? (
                 // Downloads it and compares, which is the only way to know whether there's anything
                 // in it the user doesn't already have. Saying so would be a guess.
                 <Button size="sm" icon={Download} onClick={() => chooseSource(newest.listing.url)} disabled={busy || installing}>
-                  See what's in it
+                  {m.seeWhatsIn}
                 </Button>
               ) : (
                 <Button size="sm" icon={ExternalLink} onClick={() => app.run(() => api.openExternal(newest.listing.url))}>
-                  Open page
+                  {t().common.openPage}
                 </Button>
               ))
             }
           >
             <p>
-              Newer: <strong>{newestName ?? `another ${newest ? SOURCE_LABEL[newest.listing.source] : ''} page`}</strong>
+              {rich(m.newer, { page: <strong>{newestName ?? m.anotherPage(newest ? SOURCE_LABEL[newest.listing.source] : '')}</strong> })}
               {newest?.updatedAt !== undefined && ` (${formatShortDate(newest.updatedAt)})`}
             </p>
             {newest && (
               <p className="off-links">
                 <button type="button" className="link-btn accent" onClick={() => void dropPage(newest)}>
-                  <Trash2 size={14} aria-hidden="true" /> Don't follow it? Remove that page
+                  <Trash2 size={14} aria-hidden="true" /> {m.removeThatPage}
                 </button>
               </p>
             )}
@@ -343,10 +344,10 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
               return (
                 <p key={r.listing.url} className="off-links">
                   <button type="button" className="link-btn accent" onClick={() => void toggleSite(site, false, target.key)}>
-                    <BellOff size={14} aria-hidden="true" /> Don't check {SOURCE_LABEL[site]} for {target.name}
+                    <BellOff size={14} aria-hidden="true" /> {t().creator.dontCheckFor(SOURCE_LABEL[site], target.name)}
                   </button>
                   <button type="button" className="link-btn accent" onClick={() => void stopChecking(site)}>
-                    Stop checking {SOURCE_LABEL[site]} for every creator…
+                    {m.stopEveryone(SOURCE_LABEL[site])}
                   </button>
                 </p>
               );
@@ -354,14 +355,13 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
           </Banner>
         ) : newPack ? (
           // Worth saying plainly: WhimWatch put this page under "packs you don't have" and was wrong.
-          <Banner tone="ok" title="You already have this pack">
-            Every file on this page is already in your folders, byte for byte. WhimWatch listed it as a pack you don't have because nothing of yours is named
-            after it — that's a guess from names, and the download is what settles it.
+          <Banner tone="ok" title={m.alreadyHavePackTitle}>
+            {m.alreadyHavePack}
           </Banner>
         ) : (
           <Banner
             tone="ok"
-            title="Nothing to install — you already have this"
+            title={m.nothingToInstallTitle}
             actions={
               // Only dates were compared: a Mods folder copied or synced can have reset them.
               plan.byDate && (
@@ -373,22 +373,19 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
                     setCompareAnyway(true);
                   }}
                 >
-                  Download and compare anyway
+                  {m.compareAnyway}
                 </Button>
               )
             }
           >
-            {plan.byDate ? "By the page's dates, you already have the latest files." : 'The page changed, but the file is the same as yours.'}{' '}
-            Mark it as seen and it won't come up again until something new is posted.
+            {plan.byDate ? m.byDate : m.sameFile} {m.markItSeen}
           </Banner>
         )
       )}
 
       {onlyAdds && (
-        <Banner tone="info" title="Nothing you have has changed">
-          Your files are the same as the ones on this {shownLabel ?? 'download'} page. All it adds is {addFiles.length === 1 ? 'a file' : `${addFiles.length} files`} you
-          don't have, which is usually a new pack rather than an update. Install {addFiles.length === 1 ? 'it' : 'them'} if you want{' '}
-          {addFiles.length === 1 ? 'it' : 'them'}, or mark this as seen.
+        <Banner tone="info" title={m.onlyAddsTitle}>
+          {m.onlyAdds(shownLabel, addFiles.length)}
         </Banner>
       )}
 
@@ -399,23 +396,20 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
               <ShieldCheck size={20} aria-hidden="true" />
             </span>
             <div>
-              <strong>{summary.length ? `This ${summary.join(' and ')}.` : 'Nothing selected.'}</strong>
+              <strong>{summary.length ? m.summary(summary) : m.nothingSelected}</strong>
               <p className="muted">
-                Your current files are backed up first. You can undo this from History.
-                {plan.downloads.length > 1 && ` ${plural(plan.downloads.length, 'download')} from ${shownLabel}.`}
+                {m.backedUp}
+                {plan.downloads.length > 1 && ` ${m.downloadsFrom(plan.downloads.length, shownLabel ?? '')}`}
               </p>
             </div>
           </div>
 
           {showBackups && (
             <div className="explain small">
-              Before anything is replaced or removed, WhimWatch moves your current files into a new folder inside <code>{snapshot?.backupRoot}</code>.
-              Undo in History puts them back.{' '}
-              {snapshot && snapshot.settings.keepBackupsDays > 0
-                ? `Backups are deleted after ${snapshot.settings.keepBackupsDays} days.`
-                : 'Backups are kept until you delete them.'}{' '}
+              {rich(m.backupExplain, { path: <code>{snapshot?.backupRoot}</code> })}{' '}
+              {snapshot && snapshot.settings.keepBackupsDays > 0 ? m.backupsDeletedAfter(snapshot.settings.keepBackupsDays) : m.backupsKept}{' '}
               <button type="button" className="link-btn accent" onClick={() => app.run(() => api.openBackupFolder())}>
-                <FolderOpen size={14} aria-hidden="true" /> Open backups folder
+                <FolderOpen size={14} aria-hidden="true" /> {m.openBackups}
               </button>
             </div>
           )}
@@ -434,18 +428,18 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
                 path={f.target}
                 checked={!skip.includes(f.target)}
                 onToggle={() => setSkip(toggle(skip, f.target))}
-                note={plan?.startUnticked?.includes(f.target) ? "You chose not to install this last time" : undefined}
+                note={plan?.startUnticked?.includes(f.target) ? m.skippedBefore : undefined}
               />
             ))}
             {/* Not for a pack they're getting: nothing installed can be an older version of a pack
                 they never had, so every file the creator made would be listed for removal. */}
             {!newPack && plan.possiblyObsolete.length > 0 && (
               <div className="file-section">
-                <div className="section-label">Not in this download</div>
-                <p className="muted small">Might be an older version, or an extra you got elsewhere. Tick it to remove it (it's backed up too).</p>
+                <div className="section-label">{m.notInDownload}</div>
+                <p className="muted small">{m.notInDownloadHint}</p>
                 {plan.possiblyObsolete.length > OBSOLETE_SHOWN ? (
                   // A creator with a page per pack has most of their files in here every time.
-                  <Disclosure summary={`Show ${formatCount(plan.possiblyObsolete.length)} files`}>
+                  <Disclosure summary={m.showFiles(plan.possiblyObsolete.length)}>
                     {plan.possiblyObsolete.map((path) => (
                       <FileLine key={path} kind="remove" path={path} checked={remove.includes(path)} onToggle={() => setRemove(toggle(remove, path))} />
                     ))}
@@ -460,12 +454,10 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
             {leftAlone > 0 && (
               <Disclosure
                 className="left-alone"
-                summary={`${formatCount(leftAlone)} more left alone: ${[
-                  unchanged.length > 0 && `${formatCount(unchanged.length)} already identical`,
-                  plan.skipped.length > 0 && `${formatCount(plan.skipped.length)} ${plan.skipped.length === 1 ? "isn't a mod file" : "aren't mod files"}`,
-                ]
-                  .filter(Boolean)
-                  .join(', ')}`}
+                summary={m.leftAlone(leftAlone, [
+                  ...(unchanged.length > 0 ? [m.alreadyIdentical(unchanged.length)] : []),
+                  ...(plan.skipped.length > 0 ? [m.notModFiles(plan.skipped.length)] : []),
+                ])}
               >
                 <ul className="plain-list mono small">
                   {unchanged.map((f) => (
@@ -490,13 +482,15 @@ export function UpdateDialog({ target, app, onClose }: { target: UpdateTarget; a
 }
 
 const KIND = {
-  replace: { icon: ArrowRightLeft, label: 'Replace', off: 'Skip' },
-  add: { icon: Plus, label: 'Add', off: 'Skip' },
-  remove: { icon: Minus, label: 'Remove', off: 'Keep' },
+  replace: { icon: ArrowRightLeft, off: 'skip' },
+  add: { icon: Plus, off: 'skip' },
+  remove: { icon: Minus, off: 'keep' },
 } as const;
 
 function FileLine({ kind, path, checked, onToggle, note }: { kind: keyof typeof KIND; path: string; checked: boolean; onToggle: () => void; note?: string }) {
-  const { icon: KindIcon, label, off } = KIND[kind];
+  const { icon: KindIcon } = KIND[kind];
+  const label = t().update.kind[kind];
+  const off = t().update.kind[KIND[kind].off];
   return (
     <label className={`file-line kind-${kind} ${checked ? '' : 'off'}`}>
       <Checkbox checked={checked} onChange={onToggle} label={`${label} ${fileName(path)}`} />
@@ -523,7 +517,7 @@ function ProgressBar({ received, total }: { received?: number; total?: number })
       aria-valuenow={pct === undefined ? undefined : Math.round(pct)}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuetext={received !== undefined ? `${formatBytes(received)}${total ? ` of ${formatBytes(total)}` : ''}` : undefined}
+      aria-valuetext={received !== undefined ? t().update.received(formatBytes(received), total ? formatBytes(total) : undefined) : undefined}
     >
       <span style={pct === undefined ? undefined : { width: `${pct}%` }} />
     </div>

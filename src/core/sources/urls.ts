@@ -1,3 +1,4 @@
+import { type Messages, t } from '../../shared/i18n/index.js';
 import type { SourceId } from '../../shared/types.js';
 
 /**
@@ -27,31 +28,32 @@ const LOVERSLAB_FILE = /^\/files\/file\/\d+/;
  * Why WhimWatch can't use this address, in words aimed at the person who pasted it. Undefined when
  * it can. Naming the actual problem matters: "only these are supported" leaves someone re-pasting
  * the same wrong kind of page, which is what one bug report showed happening five times over.
+ * Worded in the current language, or from `m` (the English messages, for the log).
  */
-export function linkProblem(raw: string): string | undefined {
+export function linkProblem(raw: string, m: Messages['links'] = t().links): string | undefined {
   const link = normalizeUserUrl(raw);
-  if (!link) return 'Paste the address of a download page.';
+  if (!link) return m.empty;
   let url: URL;
   try {
     url = new URL(link);
   } catch {
-    return "That doesn't look like a web address. Copy the whole address of the page from your browser.";
+    return m.notAddress;
   }
   if (!isWebUrl(url)) {
-    return 'Only web addresses can be added. Copy the whole address of the page from your browser.';
+    return m.notWeb;
   }
   const host = url.hostname.replace(/^www\./, '');
   if (host === 'loverslab.com' && !LOVERSLAB_FILE.test(url.pathname)) {
-    return 'That is a LoversLab page, but not a file page. Open the creator\'s download on LoversLab — its address looks like loverslab.com/files/file/12345-name/.';
+    return m.loversLabNotFile;
   }
   if (host === 'patreon.com' && !patreonVanity(link)) {
-    return "That is a link to one Patreon post. Use the creator's page instead — patreon.com/theirname.";
+    return m.patreonPost;
   }
   if (host === 'wickedwhimsmod.com') {
-    return 'WhimWatch always reads the WickedWhims site — add a creator\'s own page on wicked.cc, LoversLab or Patreon instead.';
+    return m.wickedWhims;
   }
   if (!classifyUrl(link)) {
-    return `WhimWatch checks wicked.cc, LoversLab and Patreon. ${host} isn't one of those.`;
+    return m.unsupported(host);
   }
   return undefined;
 }

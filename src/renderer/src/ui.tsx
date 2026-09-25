@@ -13,7 +13,8 @@ import {
   X,
 } from 'lucide-react';
 import { type ButtonHTMLAttributes, type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
-import { ROW_STATUS_LABEL, type RowStatus } from './eligibility';
+import { t } from '../../shared/i18n';
+import type { RowStatus } from './eligibility';
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'default' | 'quiet' | 'danger';
@@ -190,7 +191,7 @@ export function Banner({
         {children && <div>{children}</div>}
       </div>
       {actions && <div className="banner-actions">{actions}</div>}
-      {onClose && <IconButton label="Dismiss" icon={X} size={16} onClick={onClose} />}
+      {onClose && <IconButton label={t().common.dismiss} icon={X} size={16} onClick={onClose} />}
     </div>
   );
 }
@@ -208,10 +209,10 @@ const STATUS_ICON: Record<RowStatus, LucideIcon> = {
 export function StatusMarker({ status, checking }: { status: RowStatus; checking?: boolean }) {
   const IconComponent = checking ? LoaderCircle : STATUS_ICON[status];
   return (
-    <span className={`status status-${status}`} title={checking ? 'Being checked now' : undefined}>
+    <span className={`status status-${status}`} title={checking ? t().status.beingChecked : undefined}>
       <IconComponent size={16} className={checking ? 'spin' : undefined} aria-hidden="true" />
-      {ROW_STATUS_LABEL[status]}
-      {checking && <span className="visually-hidden"> (checking)</span>}
+      {t().status[status]}
+      {checking && <span className="visually-hidden">{t().status.checking}</span>}
     </span>
   );
 }

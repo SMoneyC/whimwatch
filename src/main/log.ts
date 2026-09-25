@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from '
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { format } from 'node:util';
+import { englishStack } from '../shared/i18n/index.js';
 
 /** Enough for the last few sessions; bug reports only ever need the end. */
 const MAX_LOG_BYTES = 128 * 1024;
@@ -25,7 +26,9 @@ export function installFileLog(dir: string): string {
       if (isExpectedNoise(message)) return;
       original(...args);
       try {
-        appendFileSync(file, `${new Date().toISOString()} [${level}] ${redact(message)}\n`);
+        // Errors worded for the user in another language go in the log in English (translatedError).
+        const english = format(...args.map((arg) => (arg instanceof Error ? englishStack(arg) : arg)));
+        appendFileSync(file, `${new Date().toISOString()} [${level}] ${redact(english)}\n`);
       } catch {
         // Never let logging break the app.
       }

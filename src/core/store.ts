@@ -50,6 +50,7 @@ export function defaultState(): AppState {
       quickHide: false,
       quickHideShortcut: 'CommandOrControl+Shift+H',
       theme: 'dark',
+      language: 'system',
       mutedSources: [],
     },
     linkPrefs: {},

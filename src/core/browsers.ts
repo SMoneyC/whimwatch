@@ -3,13 +3,15 @@
  * Pure data and parsers; launching lives in src/main/browsers.ts.
  */
 
+import type { PrivateMode } from '../shared/api.js';
+
 export type BrowserId = 'brave' | 'chrome' | 'chromium' | 'edge' | 'firefox' | 'opera' | 'vivaldi';
 
 export interface BrowserSpec {
   id: BrowserId;
   name: string;
-  /** What the browser calls its private mode. */
-  privateLabel: string;
+  /** What the browser calls its private mode (named in the link menu in the user's language). */
+  privateMode: PrivateMode;
   privateArgs: (url: string) => string[];
   /** Windows install locations relative to Program Files (PF), Program Files (x86) (PF86) or LocalAppData (LAD). */
   windows: string[];
@@ -27,7 +29,7 @@ export const BROWSERS: BrowserSpec[] = [
   {
     id: 'brave',
     name: 'Brave',
-    privateLabel: 'private window',
+    privateMode: 'private',
     privateArgs: chromium,
     windows: ['PF/BraveSoftware/Brave-Browser/Application/brave.exe', 'LAD/BraveSoftware/Brave-Browser/Application/brave.exe'],
     mac: 'Brave Browser',
@@ -37,7 +39,7 @@ export const BROWSERS: BrowserSpec[] = [
   {
     id: 'chrome',
     name: 'Google Chrome',
-    privateLabel: 'Incognito window',
+    privateMode: 'incognito',
     privateArgs: chromium,
     windows: ['PF/Google/Chrome/Application/chrome.exe', 'PF86/Google/Chrome/Application/chrome.exe', 'LAD/Google/Chrome/Application/chrome.exe'],
     mac: 'Google Chrome',
@@ -47,7 +49,7 @@ export const BROWSERS: BrowserSpec[] = [
   {
     id: 'edge',
     name: 'Microsoft Edge',
-    privateLabel: 'InPrivate window',
+    privateMode: 'inprivate',
     privateArgs: (url) => ['--inprivate', url],
     windows: ['PF86/Microsoft/Edge/Application/msedge.exe', 'PF/Microsoft/Edge/Application/msedge.exe'],
     mac: 'Microsoft Edge',
@@ -57,7 +59,7 @@ export const BROWSERS: BrowserSpec[] = [
   {
     id: 'firefox',
     name: 'Firefox',
-    privateLabel: 'private window',
+    privateMode: 'private',
     privateArgs: (url) => ['-private-window', url],
     windows: ['PF/Mozilla Firefox/firefox.exe', 'PF86/Mozilla Firefox/firefox.exe'],
     mac: 'Firefox',
@@ -67,7 +69,7 @@ export const BROWSERS: BrowserSpec[] = [
   {
     id: 'opera',
     name: 'Opera',
-    privateLabel: 'private window',
+    privateMode: 'private',
     privateArgs: (url) => ['--private', url],
     windows: ['LAD/Programs/Opera/opera.exe'],
     mac: 'Opera',
@@ -77,7 +79,7 @@ export const BROWSERS: BrowserSpec[] = [
   {
     id: 'vivaldi',
     name: 'Vivaldi',
-    privateLabel: 'private window',
+    privateMode: 'private',
     privateArgs: chromium,
     windows: ['LAD/Vivaldi/Application/vivaldi.exe'],
     mac: 'Vivaldi',
@@ -87,7 +89,7 @@ export const BROWSERS: BrowserSpec[] = [
   {
     id: 'chromium',
     name: 'Chromium',
-    privateLabel: 'Incognito window',
+    privateMode: 'incognito',
     privateArgs: chromium,
     windows: ['LAD/Chromium/Application/chrome.exe'],
     mac: 'Chromium',

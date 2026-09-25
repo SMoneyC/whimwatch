@@ -297,7 +297,11 @@ describe('runCheck', () => {
     const fetcher = new FakeFetcher(ROUTES);
     const { result } = await runCheck({ dirs: [mods], fetcher: { get: fetcher.get, head: fetcher.head } });
     const willow = result.creators.find((c) => c.name === 'Willow Bank')!;
-    expect(willow.remotes[0]).toMatchObject({ status: 'error', error: 'LoversLab can only be checked from the desktop app' });
+    expect(willow.remotes[0]).toMatchObject({
+      status: 'error',
+      problem: { code: 'desktop-only', site: 'LoversLab' },
+      error: 'LoversLab can only be checked from the desktop app',
+    });
     expect(willow.status).toBe('unknown');
   });
 });

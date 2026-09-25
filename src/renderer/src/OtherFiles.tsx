@@ -1,8 +1,8 @@
 import { AlertTriangle, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { OtherFile } from '../../shared/api';
+import { t } from '../../shared/i18n';
 import { Dialog } from './dialog';
-import { formatCount, plural } from './format';
 import { api, type AppModel } from './useApp';
 import { Spinner } from './ui';
 
@@ -30,11 +30,12 @@ export function OtherFilesDialog({ app, count, onClose }: { app: AppModel; count
 
   const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 5);
   const last = Math.min(shown.length, Math.ceil((scrollTop + VIEW_HEIGHT) / ROW_HEIGHT) + 5);
+  const m = t().otherFiles;
 
   return (
     <Dialog
-      title="Other mods and CC"
-      subtitle={`${formatCount(count)} files that aren't WickedWhims animation packs. WhimWatch doesn't check or change them.`}
+      title={m.title}
+      subtitle={m.subtitle(count)}
       onClose={onClose}
       width={720}
     >
@@ -42,8 +43,8 @@ export function OtherFilesDialog({ app, count, onClose }: { app: AppModel; count
         <Search size={15} aria-hidden="true" />
         <input
           type="search"
-          placeholder="Search files"
-          aria-label="Search files"
+          placeholder={m.search}
+          aria-label={m.search}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -51,23 +52,23 @@ export function OtherFilesDialog({ app, count, onClose }: { app: AppModel; count
           }}
           data-autofocus
         />
-        {files && query && <span className="faint small">{plural(shown.length, 'match', 'matches')}</span>}
+        {files && query && <span className="faint small">{m.matches(shown.length)}</span>}
       </label>
       {!files ? (
         <p className="muted row-center">
-          <Spinner /> Loading the list…
+          <Spinner /> {m.loading}
         </p>
       ) : (
         <div className="virtual-list" style={{ height: VIEW_HEIGHT }} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)} role="list">
           <div style={{ height: shown.length * ROW_HEIGHT, position: 'relative' }}>
             {shown.slice(first, last).map((f, i) => (
               <div key={f.path} role="listitem" className="virtual-row" style={{ top: (first + i) * ROW_HEIGHT, height: ROW_HEIGHT }}>
-                <button type="button" className="link-btn mono" title={`Show in folder\n${f.path}`} onClick={() => app.run(() => api.showFile(f.path))}>
+                <button type="button" className="link-btn mono" title={`${t().common.showInFolder}\n${f.path}`} onClick={() => app.run(() => api.showFile(f.path))}>
                   {f.relPath}
                 </button>
                 {f.error && (
                   <span className="warn-text small" title={f.error}>
-                    <AlertTriangle size={13} aria-hidden="true" /> Couldn't read
+                    <AlertTriangle size={13} aria-hidden="true" /> {m.couldntRead}
                   </span>
                 )}
               </div>

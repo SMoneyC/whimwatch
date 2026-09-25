@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { createContext, type ReactNode, useCallback, useContext, useRef, useState } from 'react';
+import { t } from '../../shared/i18n';
 import { IconButton } from './ui';
 
 export interface ToastOptions {
@@ -20,7 +21,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const next = useRef(1);
 
-  const dismiss = useCallback((id: number) => setToasts((prev) => prev.filter((t) => t.id !== id)), []);
+  const dismiss = useCallback((id: number) => setToasts((prev) => prev.filter((toast) => toast.id !== id)), []);
   const show = useCallback(
     (options: ToastOptions) => {
       const id = next.current++;
@@ -33,23 +34,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={show}>
       {children}
-      <div className="toasts" role="region" aria-label="Notifications" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast ${t.tone === 'error' ? 'toast-error' : ''}`}>
-            <span className="toast-text">{t.text}</span>
-            {t.action && (
+      <div className="toasts" role="region" aria-label={t().common.notifications} aria-live="polite">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast ${toast.tone === 'error' ? 'toast-error' : ''}`}>
+            <span className="toast-text">{toast.text}</span>
+            {toast.action && (
               <button
                 type="button"
                 className="toast-action"
                 onClick={() => {
-                  dismiss(t.id);
-                  t.action!.run();
+                  dismiss(toast.id);
+                  toast.action!.run();
                 }}
               >
-                {t.action.label}
+                {toast.action.label}
               </button>
             )}
-            <IconButton label="Dismiss" icon={X} size={14} onClick={() => dismiss(t.id)} />
+            <IconButton label={t().common.dismiss} icon={X} size={14} onClick={() => dismiss(toast.id)} />
           </div>
         ))}
       </div>

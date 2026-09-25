@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { Worker } from 'node:worker_threads';
 import sevenBin from '7zip-bin';
 import yauzl from 'yauzl';
+import { translatedError } from '../shared/i18n/index.js';
 import { CancelledError, throwIfCancelled } from './fetcher.js';
 
 const run = promisify(execFile);
@@ -36,17 +37,17 @@ export function isSafeEntryPath(name: string): boolean {
 }
 
 export function validateEntries(entries: ArchiveEntry[]): void {
-  if (entries.length > MAX_ENTRIES) throw new UnsafeArchiveError(`The download has too many files (${entries.length}).`);
+  if (entries.length > MAX_ENTRIES) throw translatedError((m) => m.downloads.tooManyFiles(entries.length), UnsafeArchiveError);
   let total = 0;
   for (const e of entries) {
-    if (!isSafeEntryPath(e.name)) throw new UnsafeArchiveError(`The download contains an unsafe path: ${e.name}`);
-    if (e.symlink) throw new UnsafeArchiveError(`The download contains a link (${basename(e.name)}), so WhimWatch won't unpack it.`);
+    if (!isSafeEntryPath(e.name)) throw translatedError((m) => m.downloads.unsafePath(e.name), UnsafeArchiveError);
+    if (e.symlink) throw translatedError((m) => m.downloads.link(basename(e.name)), UnsafeArchiveError);
     if (!e.directory && BLOCKED_FILE.test(e.name)) {
-      throw new UnsafeArchiveError(`The download contains a program (${basename(e.name)}), so WhimWatch won't install it.`);
+      throw translatedError((m) => m.downloads.program(basename(e.name)), UnsafeArchiveError);
     }
     total += e.size;
   }
-  if (total > MAX_TOTAL_BYTES) throw new UnsafeArchiveError('The download is unexpectedly large once unpacked.');
+  if (total > MAX_TOTAL_BYTES) throw translatedError((m) => m.downloads.tooLargeUnpacked, UnsafeArchiveError);
 }
 
 export async function listArchive(file: string, signal?: AbortSignal): Promise<ArchiveEntry[]> {
@@ -67,7 +68,7 @@ export async function extractDownload(file: string, dest: string, signal?: Abort
     await copyFile(file, join(dest, basename(file)));
     return [basename(file)];
   }
-  if (!ARCHIVE_FILE.test(file)) throw new UnsafeArchiveError(`Unsupported download type: ${basename(file)}`);
+  if (!ARCHIVE_FILE.test(file)) throw translatedError((m) => m.downloads.unsupportedType(basename(file)), UnsafeArchiveError);
 
   await extractOne(file, dest, signal);
   let files = await walkFiles(dest);
@@ -98,7 +99,7 @@ export async function walkFiles(root: string): Promise<string[]> {
       const full = join(dir, entry.name);
       if (entry.isSymbolicLink()) {
         const target = await realpath(full).catch(() => '');
-        if (!target.startsWith(realRoot + sep)) throw new UnsafeArchiveError(`The download contains a link outside its folder: ${entry.name}`);
+        if (!target.startsWith(realRoot + sep)) throw translatedError((m) => m.downloads.linkOutside(entry.name), UnsafeArchiveError);
         continue;
       }
       if (entry.isDirectory()) await visit(full);
@@ -122,7 +123,7 @@ function openZip(file: string): Promise<yauzl.ZipFile> {
 /** yauzl rejects traversal and absolute names itself; report those as unsafe, not as broken. */
 function zipError(err: Error): Error {
   return /invalid relative path|absolute path|invalid characters/i.test(err.message)
-    ? new UnsafeArchiveError(`The download contains an unsafe path (${err.message}).`)
+    ? translatedError((m) => m.downloads.unsafePathReason(err.message), UnsafeArchiveError)
     : err;
 }
 
@@ -164,7 +165,7 @@ async function extractZip(file: string, dest: string, signal?: AbortSignal): Pro
         const info = zipEntry(entry);
         const target = resolve(root, entry.fileName);
         if (info.symlink || !isSafeEntryPath(entry.fileName) || !target.startsWith(root + sep)) {
-          throw new UnsafeArchiveError(`The download contains an unsafe path: ${entry.fileName}`);
+          throw translatedError((m) => m.downloads.unsafePath(entry.fileName), UnsafeArchiveError);
         }
         if (info.directory) {
           await mkdir(target, { recursive: true });
@@ -227,7 +228,7 @@ function runRarWorker(file: string, dest: string | undefined, signal?: AbortSign
     });
     signal?.addEventListener('abort', onAbort, { once: true });
     worker.once('message', (msg: { ok: boolean; message?: string; entries?: ArchiveEntry[] }) =>
-      finish(() => (msg.ok ? resolvePromise({ entries: msg.entries }) : reject(new Error(`Couldn't read the RAR archive: ${msg.message}`)))),
+      finish(() => (msg.ok ? resolvePromise({ entries: msg.entries }) : reject(translatedError((m) => m.downloads.rar(String(msg.message)))))),
     );
     worker.once('error', (err) => finish(() => reject(err)));
     worker.once('exit', (code) => finish(() => reject(new Error(`RAR worker stopped (exit ${code})`))));

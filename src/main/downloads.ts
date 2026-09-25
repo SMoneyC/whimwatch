@@ -18,6 +18,7 @@ import {
 import { CancelledError, type Fetcher, throwIfCancelled } from '../core/fetcher.js';
 import { type ChooserFile, chooserFor, parseDownloadChooser, parseLoversLabFile } from '../core/sources/loverslab.js';
 import { linkedPostIds, parsePostDetail, patreonPostId, type PatreonPostDetail, postDetailApiUrl, releaseDownloads } from '../core/sources/patreon.js';
+import { translatedError } from '../shared/i18n/index.js';
 import type { RemoteInfo } from '../shared/types.js';
 import { type BrowserPool, type BrowserSite, useSiteSession } from './browser.js';
 
@@ -58,7 +59,7 @@ export async function downloadForRemote(
       return downloadOffer(site, resolved, dir, onProgress, signal, except);
     }
     default:
-      throw new DownloadUnavailableError('This source has no downloads.');
+      throw translatedError((m) => m.downloads.noDownloads, DownloadUnavailableError);
   }
 }
 
@@ -73,18 +74,20 @@ export async function resolveOffer(
   opts: { probe: boolean; only?: string; except?: readonly string[]; signal?: AbortSignal },
 ): Promise<Offer> {
   if (remote.listing.source === 'patreon') return patreonOffer(remote, pool, opts.signal);
-  if (remote.listing.source !== 'loverslab') throw new DownloadUnavailableError('This source has no downloads.');
+  if (remote.listing.source !== 'loverslab') throw translatedError((m) => m.downloads.noDownloads, DownloadUnavailableError);
   const offer = await loversLabOffer(remote.listing.url, pool, opts.signal);
   // One file by name needs the list of files to pick it from.
   if ((!opts.probe && !opts.only) || !('button' in offer)) {
-    if (opts.only) throw new DownloadUnavailableError(`${opts.only} can't be picked out of this LoversLab page. Open the page to get it.`);
+    const { only } = opts;
+    if (only) throw translatedError((m) => m.downloads.cantPickOut(only), DownloadUnavailableError);
     return offer;
   }
 
   const probe = await pool.probeInPage(remote.listing.url, offer.button);
   throwIfCancelled(opts.signal);
-  if (probe.status >= 400) throw new Error(`LoversLab returned HTTP ${probe.status}`);
-  if (!probe.body && opts.only) throw new DownloadUnavailableError(`${opts.only} can't be picked out of this LoversLab page. Open the page to get it.`);
+  if (probe.status >= 400) throw translatedError((m) => m.downloads.siteHttp('LoversLab', probe.status));
+  const { only } = opts;
+  if (!probe.body && only) throw translatedError((m) => m.downloads.cantPickOut(only), DownloadUnavailableError);
   return probe.body ? chooserOffer(probe.body, remote.listing.url, opts.only, opts.except) : { files: [offer.button] };
 }
 
@@ -124,15 +127,15 @@ async function loversLabOffer(fileUrl: string, pool: BrowserPool, signal?: Abort
   const external = externalLinks($);
   if (external) return { external };
   if (/sign in|log in|register/i.test($('.ipsType_warning, .ipsMessage').text())) {
-    throw new DownloadUnavailableError('LoversLab wants you to sign in again (Settings → Accounts).');
+    throw translatedError((m) => m.downloads.signInAgain, DownloadUnavailableError);
   }
-  throw new DownloadUnavailableError('No download button on the LoversLab page. The files may be hosted elsewhere; open the page to check.');
+  throw translatedError((m) => m.downloads.noLoversLabButton, DownloadUnavailableError);
 }
 
 /** The files to get from LoversLab's list of an entry's files; see chooserDownloads. */
 function chooserOffer(html: string, pageUrl: string, only?: string, except?: readonly string[]): Offer {
   const files = chooserDownloads(parseDownloadChooser(html, pageUrl), only, except);
-  if (!files.length) throw new DownloadUnavailableError('The LoversLab page has no mod files to download.');
+  if (!files.length) throw translatedError((m) => m.downloads.noLoversLabFiles, DownloadUnavailableError);
   return { files };
 }
 
@@ -143,10 +146,10 @@ function chooserOffer(html: string, pageUrl: string, only?: string, except?: rea
 async function patreonOffer(remote: RemoteInfo, pool: BrowserPool, signal?: AbortSignal): Promise<Offer> {
   const postUrl = remote.downloadUrl;
   const postId = postUrl ? patreonPostId(postUrl) : undefined;
-  if (!postUrl || !postId) throw new DownloadUnavailableError('Could not find the Patreon post for this update.');
+  if (!postUrl || !postId) throw translatedError((m) => m.downloads.noPatreonPost, DownloadUnavailableError);
 
   const release = await patreonPost(pool, postUrl, postId, signal);
-  if (!release.viewable) throw new DownloadUnavailableError("Your Patreon membership doesn't include this post.");
+  if (!release.viewable) throw translatedError((m) => m.downloads.notInMembership, DownloadUnavailableError);
 
   const linked: PatreonPostDetail[] = [];
   if (!release.files.some((f) => DOWNLOADABLE.test(f.name))) {
@@ -164,13 +167,13 @@ async function patreonOffer(remote: RemoteInfo, pool: BrowserPool, signal?: Abor
   if (files.length) return { files: files.map((f) => f.url) };
   const external = singleExternalLink(release.links);
   if (external) return { external };
-  throw new DownloadUnavailableError('No downloadable file found in the Patreon post or the posts it links to. Open the post to check.');
+  throw translatedError((m) => m.downloads.noPatreonFile, DownloadUnavailableError);
 }
 
 async function patreonPost(pool: BrowserPool, pageUrl: string, postId: string, signal?: AbortSignal): Promise<PatreonPostDetail> {
   const res = await pool.fetcher().browserFetch!(pageUrl, postDetailApiUrl(postId));
   throwIfCancelled(signal);
-  if (res.status !== 200) throw new Error(`Patreon returned HTTP ${res.status}`);
+  if (res.status !== 200) throw translatedError((m) => m.downloads.siteHttp('Patreon', res.status));
   return parsePostDetail(res.body);
 }
 
@@ -202,7 +205,7 @@ async function downloadAll(site: BrowserSite, urls: string[], dir: string, onPro
     const result = await downloadViaSession(site, url, dir, (r, t) => onProgress(r, t, { index, count: urls.length }), signal);
     if (result.html) {
       await rm(result.path, { force: true });
-      throw new DownloadUnavailableError('The site returned a web page instead of the file. Open the page to download it yourself.');
+      throw translatedError((m) => m.downloads.webPageOpen, DownloadUnavailableError);
     }
     paths.push(result.path);
   }
@@ -220,12 +223,12 @@ function downloadViaSession(
   onProgress: ProgressFn,
   signal?: AbortSignal,
 ): Promise<{ path: string; html: boolean }> {
-  if (!isAllowedDownloadHost(url)) throw new DownloadUnavailableError(`Downloads from ${new URL(url).hostname} aren't supported.`);
+  if (!isAllowedDownloadHost(url)) throw translatedError((m) => m.downloads.notSupportedHost(new URL(url).hostname), DownloadUnavailableError);
   const ses = useSiteSession(site);
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       ses.off('will-download', onWillDownload);
-      reject(new DownloadUnavailableError("The download didn't start. Open the page in your browser to check."));
+      reject(translatedError((m) => m.downloads.didntStart, DownloadUnavailableError));
     }, 60_000);
     const onWillDownload = (_event: Electron.Event, item: Electron.DownloadItem): void => {
       clearTimeout(timer);
@@ -233,7 +236,7 @@ function downloadViaSession(
       const chain = item.getURLChain();
       if (!chain.every(isAllowedDownloadHost)) {
         item.cancel();
-        reject(new DownloadUnavailableError('The download redirected to a site WhimWatch doesn\'t download from.'));
+        reject(translatedError((m) => m.downloads.offsiteRedirect, DownloadUnavailableError));
         return;
       }
       const html = /^text\/html/i.test(item.getMimeType());

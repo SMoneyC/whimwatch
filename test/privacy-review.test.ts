@@ -20,7 +20,8 @@ import {
 } from '../src/main/privacy.js';
 import { allowHiddenRequest, SITE_DOMAINS } from '../src/main/request-filter.js';
 import { SiteSessionMode } from '../src/main/session-mode.js';
-import { isRejectionTitle, isSignInRejection, PASSWORD_HELP, PASSWORD_PATH, signInProvider } from '../src/main/sign-in-provider.js';
+import { isRejectionTitle, isSignInRejection, PASSWORD_HELP, signInProvider } from '../src/main/sign-in-provider.js';
+import { t } from '../src/shared/i18n/index.js';
 import { gameWarnings } from '../src/shared/game.js';
 import { privacyLevel, privacyLevelPatch } from '../src/shared/privacy.js';
 import type { RemoteInfo } from '../src/shared/types.js';
@@ -206,7 +207,7 @@ describe('signing in through another service', () => {
     expect(signInProvider(PASSWORD_HELP.patreon ?? '')).toBeUndefined();
     // Named so nobody has to hunt: an account made through Google has no password, and this is
     // where Patreon offers to set one.
-    expect(PASSWORD_PATH.patreon).toContain('Set Password');
+    expect(t().main.passwordPath.patreon).toContain('Set Password');
   });
 });
 

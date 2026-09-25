@@ -12,6 +12,7 @@ import {
   parseRegProgId,
 } from '../core/browsers.js';
 import type { LinkBrowser } from '../shared/api.js';
+import { translatedError } from '../shared/i18n/index.js';
 
 const run = promisify(execFile);
 
@@ -37,7 +38,7 @@ export async function openPrivate(id: string, url: string): Promise<void> {
   if (!/^https?:\/\//i.test(url)) throw new Error('Only web links can be opened.');
   const browser = (await installedBrowsers()).find((b) => b.id === id);
   const spec = BROWSERS.find((b) => b.id === id);
-  if (!browser || !spec) throw new Error('That browser is no longer installed.');
+  if (!browser || !spec) throw translatedError((m) => m.main.browserGone);
   // No shell is involved: the URL is passed as a single argument.
   const child = spawn(browser.command, [...browser.prefix, ...spec.privateArgs(url)], { detached: true, stdio: 'ignore' });
   child.on('error', () => undefined);
@@ -83,7 +84,7 @@ async function detect(): Promise<Installed[]> {
 }
 
 function entry(spec: BrowserSpec, command: string, prefix: string[]): Installed {
-  return { id: spec.id, name: spec.name, privateLabel: spec.privateLabel, isDefault: false, command, prefix };
+  return { id: spec.id, name: spec.name, privateMode: spec.privateMode, isDefault: false, command, prefix };
 }
 
 function winRoots(): Record<string, string | undefined> {

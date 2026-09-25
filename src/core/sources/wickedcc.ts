@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import type { Listing } from '../../shared/types.js';
 import type { Fetcher, HttpResponse } from '../fetcher.js';
 import { jsonLd, meta, metaRefreshTarget, str } from './html.js';
+import { problemFields } from '../../shared/problems.js';
 import type { SourceChecker, SourceFindings } from './types.js';
 import { parseDate, patreonVanity } from './urls.js';
 
@@ -80,8 +81,8 @@ export async function getFollowingRefresh(fetcher: Fetcher, url: string): Promis
 
 export const checkWickedCc: SourceChecker = async (listing, fetcher) => {
   const res = await getFollowingRefresh(fetcher, listing.url);
-  if (res.status === 404) return { status: 'not-found', error: 'Page not found' };
-  if (res.status !== 200) return { status: 'error', error: `HTTP ${res.status}` };
+  if (res.status === 404) return { status: 'not-found', ...problemFields({ code: 'page-not-found' }) };
+  if (res.status !== 200) return { status: 'error', ...problemFields({ code: 'http', status: res.status }) };
   const page = parseWickedCcPage(res.body, res.url);
   if (page.updatedAt === undefined) {
     const packs = parseCreatorIndex(res.body, new URL(res.url).pathname).slice(0, MAX_INDEX_PACKS);
@@ -96,7 +97,7 @@ export const checkWickedCc: SourceChecker = async (listing, fetcher) => {
     author: page.author,
     patreonLinks: page.patreonLinks,
   };
-  if (page.updatedAt === undefined) return { ...findings, status: 'error', error: 'No update date on page' };
+  if (page.updatedAt === undefined) return { ...findings, status: 'error', ...problemFields({ code: 'no-date' }) };
   return findings;
 };
 

@@ -1,5 +1,7 @@
 /** Types shared by core, main process and renderer. Keep free of Node/DOM imports. */
 
+import type { LanguageSetting } from './i18n/locales.js';
+
 export type PackageKind = 'ww-animation' | 'ww-cas' | 'ww-core' | 'other';
 
 export interface AppSettings {
@@ -36,6 +38,8 @@ export interface AppSettings {
   /** Electron accelerator for quick hide, e.g. "CommandOrControl+Shift+H". */
   quickHideShortcut: string;
   theme: 'system' | 'dark' | 'light';
+  /** The language WhimWatch is shown in; "system" follows the system's preferred languages. */
+  language: LanguageSetting;
   /** Sites the user turned off: never contacted during checks, and their updates aren't shown. */
   mutedSources: UpdateSite[];
 }
@@ -72,6 +76,31 @@ export interface Listing {
 }
 
 export type RemoteStatus = 'ok' | 'error' | 'needs-verification' | 'not-found';
+
+/**
+ * Why a page couldn't be read. Saved with the results as a code rather than as words, so it's worded
+ * in whatever language WhimWatch is in when it's shown (see shared/problems.ts).
+ */
+export type RemoteProblem =
+  | { code: 'http' | 'posts-api'; status: number }
+  | { code: 'verification' | 'desktop-only'; site: string }
+  /** A failure WhimWatch has no words of its own for, such as a network error: its text, as given. */
+  | { code: 'failed'; reason: string }
+  | {
+      code:
+        | 'page-not-found'
+        | 'file-not-found'
+        | 'creator-not-found'
+        | 'different-page'
+        | 'no-date'
+        | 'not-creator-page'
+        | 'no-patreon-page'
+        | 'no-release-posts'
+        | 'no-posts'
+        | 'unsupported-link'
+        | 'interrupted'
+        | 'timeout';
+    };
 
 export interface RemoteInfo {
   listing: Listing;
@@ -122,6 +151,9 @@ export interface RemoteInfo {
    * a companion file an update needs is never among them. Remembered as skipped (see pack-files.ts).
    */
   variants?: string[];
+  /** Why the page couldn't be read; shown in the user's language. Absent in results saved by earlier versions. */
+  problem?: RemoteProblem;
+  /** The same, in English words: for the report and diagnostics, and results saved before `problem`. */
   error?: string;
 }
 

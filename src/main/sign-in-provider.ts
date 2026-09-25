@@ -56,11 +56,3 @@ export function isRejectionTitle(title: string): boolean {
 export const PASSWORD_HELP: Partial<Record<BrowserSite, string>> = {
   patreon: 'https://www.patreon.com/login',
 };
-
-/**
- * Where the password is set once signed in there. An account made through
- * Google has none, and Patreon offers to set one (no old password to give).
- */
-export const PASSWORD_PATH: Partial<Record<BrowserSite, string>> = {
-  patreon: 'set one under Settings → Account → Login → Set Password',
-};

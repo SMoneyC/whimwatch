@@ -15,11 +15,13 @@ import {
   Trash2,
 } from 'lucide-react';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { t } from '../../shared/i18n';
 import { type CreatorResult, type RemoteInfo, UPDATE_SITES, type UpdateSite } from '../../shared/types';
 import { ownedRemotes } from '../../shared/updatable';
-import { AFTER_CHECK, gettableNewPack, ignoredFilesFor, type NewFile, newFilesFor, newPacksFor, rowAction, rowStatus, rowSummary, siteList } from './eligibility';
+import { afterCheck, gettableNewPack, ignoredFilesFor, type NewFile, newFilesFor, newPacksFor, rowAction, rowStatus, rowSummary, siteNames } from './eligibility';
 import { formatVersion } from '../../shared/version';
-import { formatShortDate, plural, remoteSummary, pageLabel, shortTitle, SOURCE_LABEL, timeAgo } from './format';
+import { formatShortDate, remoteSummary, pageLabel, shortTitle, SOURCE_LABEL, timeAgo } from './format';
+import { rich } from './rich';
 import { useToast } from './toast';
 import type { UpdateTarget } from './UpdateDialog';
 import { api, type AppModel } from './useApp';
@@ -86,6 +88,7 @@ function CreatorRow({
   const sources = [...new Set(c.remotes.map((r) => SOURCE_LABEL[r.listing.source]))];
   const packs = newPacksFor(c, snapshot);
   const files = newFilesFor(c, snapshot);
+  const m = t();
 
   return (
     <li className={`creator ${expanded ? 'expanded' : ''}`}>
@@ -97,46 +100,46 @@ function CreatorRow({
                 update. It sits on the creator's own line, where it can't be read as one. */}
             {packs.length + files.length > 0 && !pending && (
               <span className="tag new-packs-tag">
-                <PackagePlus size={12} aria-hidden="true" /> {plural(packs.length + files.length, 'new pack')}
+                <PackagePlus size={12} aria-hidden="true" /> {m.creator.newPacks(packs.length + files.length)}
               </span>
             )}
-            {plural(c.files.length, 'file')}
+            {m.common.files(c.files.length)}
             {sources.length > 0 && ` · ${sources.join(', ')}`}
           </span>
         </button>
-        <span className={`creator-summary ${pending ? 'faint' : ''}`}>{pending ? 'Checking now' : rowSummary(c, (t) => timeAgo(t))}</span>
+        <span className={`creator-summary ${pending ? 'faint' : ''}`}>{pending ? m.summary.checkingNow : rowSummary(c, (at) => timeAgo(at))}</span>
         <StatusMarker status={status} checking={pending && app.snapshot?.running} />
         <span className="creator-action">
           {action.kind === 'update' && (
             <Button size="sm" icon={Download} onClick={() => onUpdate({ key: c.key, name: c.name })}
               disabled={busy || snapshot.running}
-              title={snapshot.running ? AFTER_CHECK : undefined}
+              title={snapshot.running ? afterCheck() : undefined}
             >
-              Update
+              {m.common.update}
             </Button>
           )}
           {action.kind === 'sign-in' && (
             <Button size="sm" icon={LogIn} onClick={() => app.run(() => api.signIn(action.site))}>
-              Sign in to {SOURCE_LABEL[action.site]}
+              {m.common.signInTo(SOURCE_LABEL[action.site])}
             </Button>
           )}
           {action.kind === 'open' && (
             <Button size="sm" icon={ExternalLink} onClick={() => app.run(() => api.openExternal(action.url))} onContextMenu={linkMenu(app, action.url)}>
-              Open page
+              {m.common.openPage}
             </Button>
           )}
           {action.kind === 'verify' && (
             <Button size="sm" icon={ShieldCheck} onClick={() => app.run(() => api.showVerification(action.site))}>
-              Verify
+              {m.common.verify}
             </Button>
           )}
           {action.kind === 'add-page' && (
             <Button size="sm" icon={Plus} onClick={() => onAdding(true)}>
-              Add page
+              {m.creator.addPage}
             </Button>
           )}
         </span>
-        <IconButton label={expanded ? `Collapse ${c.name}` : `Expand ${c.name}`} icon={expanded ? ChevronDown : ChevronRight} size={16} onClick={onToggle} aria-expanded={expanded} />
+        <IconButton label={expanded ? m.creator.collapse(c.name) : m.creator.expand(c.name)} icon={expanded ? ChevronDown : ChevronRight} size={16} onClick={onToggle} aria-expanded={expanded} />
       </div>
 
       {progress && (busy || progress.stage === 'error') && !expanded && (
@@ -184,11 +187,12 @@ function CreatorDetails({
   // back after its toast is gone. Only their addresses are kept.
   const removed = snapshot.rejectedLinks[c.key] ?? [];
   const toast = useToast();
+  const m = t().creator;
   const showPageAgain = async (url: string): Promise<void> => {
     const done = await app.run(() => api.unrejectLink(c.key, url));
     if (!done) return;
     // No "Check now": that checks every creator, a lot of traffic to bring back one page.
-    toast({ text: 'This page will be shown on the next check' });
+    toast({ text: m.shownNextCheck });
   };
   const hiddenPacks = c.remotes.length - pages.length;
 
@@ -203,15 +207,15 @@ function CreatorDetails({
         </p>
       )}
       <div className="section-label">
-        Download pages
+        {m.downloadPages}
         {hideTitles && c.remotes.some((r) => r.title) && (
           <span className="faint hint-inline">
-            <EyeOff size={14} aria-hidden="true" /> Page titles hidden
+            <EyeOff size={14} aria-hidden="true" /> {m.titlesHidden}
           </span>
         )}
       </div>
       {c.remotes.length === 0 && !muted.length && !unread.length ? (
-        <p className="muted small">No download pages found for this creator yet. Add a wicked.cc, LoversLab or Patreon page below.</p>
+        <p className="muted small">{m.noPages}</p>
       ) : (
         pages.length > 0 && (
           <div className="source-grid">
@@ -226,7 +230,7 @@ function CreatorDetails({
           {unread.map((url) => (
             <li key={url}>
               <span className="small grow">{pageLabel(url, hideTitles)}</span>
-              <span className="faint small">Added by you · Not read yet</span>
+              <span className="faint small">{m.addedNotRead}</span>
             </li>
           ))}
         </ul>
@@ -234,10 +238,8 @@ function CreatorDetails({
 
       {packs.length > 0 && (
         <>
-          <div className="section-label">Packs you don't have</div>
-          <p className="muted small">
-            Nothing in your folders matches {packs.length === 1 ? 'this page' : 'these pages'}. Not counted as updates.
-          </p>
+          <div className="section-label">{m.packsYouDontHave}</div>
+          <p className="muted small">{m.nothingMatches(packs.length)}</p>
           <div className="source-grid">
             {packs.map((r) => (
               <NewPackCard key={r.listing.url} remote={r} creator={c} app={app} hideTitle={hideTitles} onUpdate={onUpdate} />
@@ -248,10 +250,8 @@ function CreatorDetails({
 
       {files.length > 0 && (
         <>
-          <div className="section-label">New on {files.length === 1 ? 'a page' : 'pages'} of theirs</div>
-          <p className="muted small">
-            {files.length === 1 ? 'This file was' : 'These files were'} added to a page that also has one of your packs. Not counted as updates.
-          </p>
+          <div className="section-label">{m.newOnPages(files.length)}</div>
+          <p className="muted small">{m.filesAdded(files.length)}</p>
           <div className="source-grid">
             {files.map((f) => (
               <NewFileCard key={`${f.remote.listing.url} ${f.name}`} file={f} creator={c} app={app} hideTitle={hideTitles} onUpdate={onUpdate} />
@@ -263,8 +263,7 @@ function CreatorDetails({
         <p className="muted small off-note">
           <BellOff size={14} aria-hidden="true" />
           <span>
-            {ignored.length === 1 ? (hideTitles ? 'A file on their page' : ignored[0]!.name) : `${ignored.length} files on their pages`} {ignored.length === 1 ? 'is' : 'are'}{' '}
-            ignored.{' '}
+            {ignored.length > 1 ? m.ignoredFiles(ignored.length) : hideTitles ? m.ignoredHiddenFile : m.ignoredFile(ignored[0]!.name)}{' '}
             <button
               type="button"
               className="link-btn accent"
@@ -272,22 +271,20 @@ function CreatorDetails({
                 for (const f of ignored) await api.setFileIgnored(c.key, f.name, false);
               })}
             >
-              Show {ignored.length === 1 ? 'it' : 'them'} again
+              {m.showIgnored(ignored.length)}
             </button>
           </span>
         </p>
       )}
       {removed.length > 0 && (
-        <Disclosure summary={`${plural(removed.length, 'page')} hidden`} className="removed-pages">
-          <p className="muted small">
-            You opted to remove {removed.length === 1 ? 'this page' : 'these pages'}.
-          </p>
+        <Disclosure summary={m.pagesHidden(removed.length)} className="removed-pages">
+          <p className="muted small">{m.youRemoved(removed.length)}</p>
           <ul className="file-list">
             {removed.map((url) => (
               <li key={url}>
                 <span className="small grow">{pageLabel(url, hideTitles)}</span>
                 <button type="button" className="link-btn accent small" onClick={() => void showPageAgain(url)}>
-                  Show again
+                  {m.showAgain}
                 </button>
               </li>
             ))}
@@ -297,30 +294,24 @@ function CreatorDetails({
       {hiddenPacks > 0 && packs.length === 0 && (
         <p className="muted small off-note">
           <PackagePlus size={14} aria-hidden="true" />
-          <span>
-            {hiddenPacks === 1 ? '1 page is' : `${hiddenPacks} pages are`} for packs you don't have, not counted as updates.
-            Turn on <em>Show packs you don't have</em> in Settings → General to list {hiddenPacks === 1 ? 'it' : 'them'}.
-          </span>
+          <span>{rich(m.hiddenPacks(hiddenPacks), { setting: <em>{t().settings.newPacks}</em> })}</span>
         </p>
       )}
       {offEverywhere.length > 0 && (
         <p className="muted small off-note">
           <BellOff size={14} aria-hidden="true" />
-          <span>
-            {siteList(offEverywhere)} {offEverywhere.length === 1 ? "isn't" : "aren't"} checked: you turned {offEverywhere.length === 1 ? 'it' : 'them'} off
-            for every creator in Settings → General.
-          </span>
+          <span>{m.offEverywhere(siteNames(offEverywhere))}</span>
         </p>
       )}
 
       <fieldset className="creator-sites">
-        <legend className="muted small">Check for {c.name}</legend>
+        <legend className="muted small">{m.checkFor(c.name)}</legend>
         {UPDATE_SITES.map((site) => {
           const everywhere = snapshot.settings.mutedSources.includes(site);
           return (
-            <label key={site} className={`site-check small ${everywhere ? 'faint' : ''}`} title={everywhere ? 'Turned off for every creator in Settings → General' : undefined}>
+            <label key={site} className={`site-check small ${everywhere ? 'faint' : ''}`} title={everywhere ? m.offForEveryone : undefined}>
               <Checkbox
-                label={`Check ${SOURCE_LABEL[site]} for ${c.name}`}
+                label={m.checkSiteFor(SOURCE_LABEL[site], c.name)}
                 checked={!everywhere && !offHere.includes(site)}
                 disabled={everywhere}
                 onChange={() => void toggleSite(site, offHere.includes(site), c.key)}
@@ -336,14 +327,14 @@ function CreatorDetails({
       <div className="creator-foot">
         {!adding && (
           <Button variant="quiet" size="sm" icon={Plus} onClick={() => onAdding(true)}>
-            Add a download page
+            {m.addDownloadPage}
           </Button>
         )}
-        <Disclosure summary={`Your files (${c.files.length})`} className="files-disclosure">
+        <Disclosure summary={m.yourFiles(c.files.length)} className="files-disclosure">
           <ul className="file-list">
             {c.files.map((f) => (
               <li key={f.path}>
-                <button type="button" className="link-btn mono" title={`Show in folder\n${f.path}`} onClick={() => app.run(() => api.showFile(f.path))}>
+                <button type="button" className="link-btn mono" title={`${t().common.showInFolder}\n${f.path}`} onClick={() => app.run(() => api.showFile(f.path))}>
                   {f.relPath}
                 </button>
                 <span className="faint small">{formatShortDate(f.mtimeMs)}</span>
@@ -353,13 +344,13 @@ function CreatorDetails({
         </Disclosure>
         <span className="spacer" />
         {c.status === 'update-available' && c.remoteUpdatedAt !== undefined && (
-          <Button size="sm" onClick={() => app.run(() => api.dismiss(c.key, c.remoteUpdatedAt!))} title="Hide this update until a newer release is posted">
-            Mark as seen
+          <Button size="sm" onClick={() => app.run(() => api.dismiss(c.key, c.remoteUpdatedAt!))} title={m.markSeenTitle}>
+            {t().common.markAsSeen}
           </Button>
         )}
         {seenUndo && (
           <Button variant="quiet" size="sm" icon={RotateCcw} onClick={() => app.run(() => api.undismiss(c.key))}>
-            Undo mark as seen
+            {t().common.undoMarkAsSeen}
           </Button>
         )}
       </div>
@@ -372,24 +363,25 @@ function SourceCard({ remote: r, creator, app, hideTitle }: { remote: RemoteInfo
   const toggleSite = useSiteToggle(app);
   const label = SOURCE_LABEL[r.listing.source];
   const updateSite = r.listing.source === 'wwmod' ? undefined : r.listing.source;
+  const m = t();
 
   const stopChecking = async (s: UpdateSite): Promise<void> => {
     if (!(await toggleSite(s, false, creator.key))) return;
     toast({
-      text: `Stopped checking ${label} for ${creator.name}`,
-      action: { label: 'Undo', run: () => void toggleSite(s, true, creator.key) },
+      text: m.creator.stoppedChecking(label, creator.name),
+      action: { label: m.common.undo, run: () => void toggleSite(s, true, creator.key) },
     });
   };
   const site = r.listing.source === 'loverslab' || r.listing.source === 'patreon' ? r.listing.source : undefined;
   const problem = r.status !== 'ok';
-  const shownTitle = !r.title || hideTitle ? `${label} page` : r.title;
+  const shownTitle = !r.title || hideTitle ? m.common.sitePage(label) : r.title;
 
   const remove = async (): Promise<void> => {
     const done = await app.run(() => api.rejectLink(creator.key, r.listing.url));
     if (!done) return;
     toast({
-      text: `Removed the ${label} page from ${creator.name}`,
-      action: { label: 'Undo', run: () => void app.run(() => api.undoRejectLink(creator.key, r.listing.url)) },
+      text: m.creator.removedPage(label, creator.name),
+      action: { label: m.common.undo, run: () => void app.run(() => api.undoRejectLink(creator.key, r.listing.url)) },
     });
   };
 
@@ -401,7 +393,7 @@ function SourceCard({ remote: r, creator, app, hideTitle }: { remote: RemoteInfo
       <div className="source-text">
         <span className="source-title">
           {label}
-          {r.locked && <Lock size={13} className="faint" aria-label="Patrons only" />}
+          {r.locked && <Lock size={13} className="faint" aria-label={m.creator.patronsOnly} />}
         </span>
         <span className={`source-sub ${problem ? 'warn-text' : 'faint'}`} title={hideTitle && r.title ? r.title : undefined}>
           {problem ? remoteSummary(r) : shownTitle}
@@ -417,27 +409,27 @@ function SourceCard({ remote: r, creator, app, hideTitle }: { remote: RemoteInfo
             {r.version && <span className="faint small source-version">{formatVersion(r.version)}</span>}
           </>
         )}
-        {r.listing.origin === 'discovered' && <span className="tag">Suggested</span>}
-        {r.listing.origin === 'manual' && <span className="tag">Added by you</span>}
+        {r.listing.origin === 'discovered' && <span className="tag">{m.creator.suggested}</span>}
+        {r.listing.origin === 'manual' && <span className="tag">{m.creator.addedByYou}</span>}
       </div>
       {r.status === 'needs-verification' && site && (
         <Button size="sm" onClick={() => app.run(() => api.showVerification(site))}>
-          Verify
+          {m.common.verify}
         </Button>
       )}
       <IconButton
-        label={`Open ${label} page (right-click for a private window)`}
+        label={m.creator.openSitePage(label)}
         icon={ExternalLink}
         size={16}
         onClick={() => app.run(() => api.openExternal(r.listing.url))}
         onContextMenu={linkMenu(app, r.listing.url)}
       />
       <MenuButton
-        label={`More for the ${label} page`}
+        label={m.creator.moreForSitePage(label)}
         items={[
-          { label: 'Open privately or copy link…', icon: Copy, onSelect: () => void app.run(() => api.showLinkMenu(r.listing.url)) },
-          ...(updateSite ? [{ label: `Don't check ${label} for ${creator.name}`, icon: BellOff, onSelect: () => void stopChecking(updateSite) }] : []),
-          { label: "Not this creator's page", icon: Trash2, danger: true, onSelect: () => void remove() },
+          { label: m.creator.openPrivately, icon: Copy, onSelect: () => void app.run(() => api.showLinkMenu(r.listing.url)) },
+          ...(updateSite ? [{ label: m.creator.dontCheckFor(label, creator.name), icon: BellOff, onSelect: () => void stopChecking(updateSite) }] : []),
+          { label: m.creator.notTheirPage, icon: Trash2, danger: true, onSelect: () => void remove() },
         ]}
       />
     </div>
@@ -464,7 +456,8 @@ function NewPackCard({
   const toast = useToast();
   const snapshot = app.snapshot!;
   const label = SOURCE_LABEL[r.listing.source];
-  const name = !r.title || hideTitle ? `${label} page` : r.title;
+  const m = t();
+  const name = !r.title || hideTitle ? m.common.sitePage(label) : r.title;
   const progress = app.updates[creator.key];
   const busy = progress !== undefined && progress.stage !== 'done' && progress.stage !== 'error';
   // A patrons-only post would 403: offer the page, not a button that fails.
@@ -474,8 +467,8 @@ function NewPackCard({
     const done = await app.run(() => api.rejectLink(creator.key, r.listing.url));
     if (!done) return;
     toast({
-      text: `WhimWatch won't mention ${hideTitle || !r.title ? 'that pack' : shortTitle(r.title, 40)} again`,
-      action: { label: 'Undo', run: () => void app.run(() => api.undoRejectLink(creator.key, r.listing.url)) },
+      text: m.creator.wontMention(hideTitle || !r.title ? m.creator.thatPack : shortTitle(r.title, 40)),
+      action: { label: m.common.undo, run: () => void app.run(() => api.undoRejectLink(creator.key, r.listing.url)) },
     });
   };
 
@@ -491,32 +484,32 @@ function NewPackCard({
           {/* Unreachable while classifyRemotes only reads wicked.cc and `locked` is Patreon's alone.
               Kept with `gettable` below so that extending classification to Patreon offers the page
               rather than a download button that 403s, which is the point of both. */}
-          {r.locked && <Lock size={13} className="faint" aria-label="Patrons only" />}
+          {r.locked && <Lock size={13} className="faint" aria-label={m.creator.patronsOnly} />}
         </span>
-        <span className="source-sub faint">Posted {formatShortDate(r.updatedAt)}</span>
+        <span className="source-sub faint">{m.creator.posted(formatShortDate(r.updatedAt))}</span>
       </div>
       {gettable ? (
         <Button
           size="sm"
           icon={Download}
           disabled={busy || snapshot.running}
-          title={snapshot.running ? AFTER_CHECK : undefined}
+          title={snapshot.running ? afterCheck() : undefined}
           onClick={() => onUpdate({ key: creator.key, name: creator.name, listingUrl: r.listing.url, packName: r.title })}
         >
-          Get it
+          {m.creator.getIt}
         </Button>
       ) : (
         // Patrons-only: a download button here would only ever 403.
         <Button size="sm" icon={ExternalLink} onClick={() => app.run(() => api.openExternal(r.listing.url))} onContextMenu={linkMenu(app, r.listing.url)}>
-          Open page
+          {m.common.openPage}
         </Button>
       )}
       <MenuButton
-        label={`More for ${name}`}
+        label={m.creator.moreFor(name)}
         items={[
-          ...(gettable ? [{ label: 'Open page', icon: ExternalLink, onSelect: () => void app.run(() => api.openExternal(r.listing.url)) }] : []),
-          { label: 'Open privately or copy link…', icon: Copy, onSelect: () => void app.run(() => api.showLinkMenu(r.listing.url)) },
-          { label: 'Not interested', icon: BellOff, danger: true, onSelect: () => void notInterested() },
+          ...(gettable ? [{ label: m.common.openPage, icon: ExternalLink, onSelect: () => void app.run(() => api.openExternal(r.listing.url)) }] : []),
+          { label: m.creator.openPrivately, icon: Copy, onSelect: () => void app.run(() => api.showLinkMenu(r.listing.url)) },
+          { label: m.creator.notInterested, icon: BellOff, danger: true, onSelect: () => void notInterested() },
         ]}
       />
     </div>
@@ -545,8 +538,9 @@ function NewFileCard({
   const snapshot = app.snapshot!;
   const r = file.remote;
   const label = SOURCE_LABEL[r.listing.source];
+  const m = t();
   // A file name says what's in it, so it follows "Hide page titles" like a page title does.
-  const name = hideTitle ? `New file on the ${label} page` : file.name;
+  const name = hideTitle ? m.creator.newFileOnPage(label) : file.name;
   const progress = app.updates[creator.key];
   const busy = progress !== undefined && progress.stage !== 'done' && progress.stage !== 'error';
   const gettable = gettableNewPack(r, snapshot);
@@ -555,8 +549,8 @@ function NewFileCard({
     const done = await app.run(() => api.setFileIgnored(creator.key, file.name, true));
     if (!done) return;
     toast({
-      text: `WhimWatch won't mention ${hideTitle ? 'that file' : shortTitle(file.name, 40)} again`,
-      action: { label: 'Undo', run: () => void app.run(() => api.setFileIgnored(creator.key, file.name, false)) },
+      text: m.creator.wontMention(hideTitle ? m.creator.thatFile : shortTitle(file.name, 40)),
+      action: { label: m.common.undo, run: () => void app.run(() => api.setFileIgnored(creator.key, file.name, false)) },
     });
   };
 
@@ -569,30 +563,30 @@ function NewFileCard({
         <span className="source-title" title={name}>
           {name}
         </span>
-        <span className="source-sub faint">Posted {formatShortDate(file.updatedAt)}</span>
+        <span className="source-sub faint">{m.creator.posted(formatShortDate(file.updatedAt))}</span>
       </div>
       {gettable ? (
         <Button
           size="sm"
           icon={Download}
           disabled={busy || snapshot.running}
-          title={snapshot.running ? AFTER_CHECK : undefined}
+          title={snapshot.running ? afterCheck() : undefined}
           // The page holds their pack and its variants too: download this one file, nothing else.
           onClick={() => onUpdate({ key: creator.key, name: creator.name, listingUrl: r.listing.url, packName: hideTitle ? undefined : file.name, fileName: file.name })}
         >
-          Get it
+          {m.creator.getIt}
         </Button>
       ) : (
         <Button size="sm" icon={ExternalLink} onClick={() => app.run(() => api.openExternal(r.listing.url))} onContextMenu={linkMenu(app, r.listing.url)}>
-          Open page
+          {m.common.openPage}
         </Button>
       )}
       <MenuButton
-        label={`More for ${name}`}
+        label={m.creator.moreFor(name)}
         items={[
-          ...(gettable ? [{ label: 'Open page', icon: ExternalLink, onSelect: () => void app.run(() => api.openExternal(r.listing.url)) }] : []),
-          { label: 'Open privately or copy link…', icon: Copy, onSelect: () => void app.run(() => api.showLinkMenu(r.listing.url)) },
-          { label: 'Not interested', icon: BellOff, danger: true, onSelect: () => void notInterested() },
+          ...(gettable ? [{ label: m.common.openPage, icon: ExternalLink, onSelect: () => void app.run(() => api.openExternal(r.listing.url)) }] : []),
+          { label: m.creator.openPrivately, icon: Copy, onSelect: () => void app.run(() => api.showLinkMenu(r.listing.url)) },
+          { label: m.creator.notInterested, icon: BellOff, danger: true, onSelect: () => void notInterested() },
         ]}
       />
     </div>
@@ -615,13 +609,13 @@ function AddPage({ creator, app, onDone }: { creator: CreatorResult; app: AppMod
   return (
     <form className="add-page" onSubmit={submit}>
       <label className="visually-hidden" htmlFor={`add-${creator.key}`}>
-        Download page for {creator.name}
+        {t().creator.downloadPageFor(creator.name)}
       </label>
       <input
         id={`add-${creator.key}`}
         ref={input}
         type="url"
-        placeholder="Paste a wicked.cc, LoversLab or Patreon page"
+        placeholder={t().creator.pastePage}
         value={url}
         onChange={(e) => setUrl(e.target.value)}
         onKeyDown={(e) => {
@@ -632,10 +626,10 @@ function AddPage({ creator, app, onDone }: { creator: CreatorResult; app: AppMod
         }}
       />
       <Button type="submit" size="sm" disabled={!url.trim()}>
-        Add
+        {t().creator.add}
       </Button>
       <Button variant="quiet" size="sm" onClick={onDone}>
-        Cancel
+        {t().common.cancel}
       </Button>
     </form>
   );

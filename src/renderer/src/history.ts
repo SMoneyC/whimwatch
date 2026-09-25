@@ -1,3 +1,5 @@
+import { dateTimeFormat } from '../../shared/i18n/format';
+import { t } from '../../shared/i18n';
 import type { InstallRecord, SeenEvent } from '../../shared/types';
 
 export type HistoryItem =
@@ -63,16 +65,17 @@ export function fileCounts(records: InstallRecord[]): { replaced: number; added:
 }
 
 /** Day headings: "Today", "Yesterday", "Friday, Sep 11" this past month, then "August" / "August 2025". */
-export function dayLabel(t: number, now = Date.now()): string {
+export function dayLabel(at: number, now = Date.now()): string {
   const day = (x: number): number => {
     const d = new Date(x);
     return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   };
-  const days = Math.round((day(now) - day(t)) / 86_400_000);
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  const date = new Date(t);
-  if (days < 30) return new Intl.DateTimeFormat('en', { weekday: 'long', month: 'short', day: 'numeric' }).format(date);
+  const days = Math.round((day(now) - day(at)) / 86_400_000);
+  if (days <= 0) return t().time.today;
+  if (days === 1) return t().time.yesterday;
+  const date = new Date(at);
   const sameYear = date.getFullYear() === new Date(now).getFullYear();
-  return new Intl.DateTimeFormat('en', sameYear ? { month: 'long' } : { month: 'long', year: 'numeric' }).format(date);
+  const label = dateTimeFormat(days < 30 ? { weekday: 'long', month: 'short', day: 'numeric' } : sameYear ? { month: 'long' } : { month: 'long', year: 'numeric' }).format(date);
+  // A heading: some languages write day and month names in lower case ("venerdì 11 set").
+  return label.charAt(0).toLocaleUpperCase() + label.slice(1);
 }
