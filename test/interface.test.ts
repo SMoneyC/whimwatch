@@ -184,6 +184,10 @@ describe('wording and shortcuts', () => {
     expect(timeAgo(NOW - 12 * 60_000, NOW)).toBe('12 minutes ago');
     expect(timeAgo(NOW - DAY, NOW)).toBe('yesterday');
     expect(timeAgo(NOW - 16 * DAY, NOW)).toBe('2 weeks ago');
+    // Whole units only: a release 6 years and 7 months back is "6 years ago", never 7.
+    expect(timeAgo(NOW - (6 * 365 + 207) * DAY, NOW)).toBe('6 years ago');
+    expect(timeAgo(NOW - 350 * DAY, NOW)).toBe('11 months ago');
+    expect(timeAgo(NOW - 1.9 * DAY, NOW)).toBe('yesterday');
     expect(formatCount(3812)).toBe('3,812');
     expect(plural(1, 'file')).toBe('1 file');
     expect(plural(2, 'match', 'matches')).toBe('2 matches');

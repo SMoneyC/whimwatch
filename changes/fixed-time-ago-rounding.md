@@ -1,0 +1,1 @@
+- "Released … ago" and similar counts whole years, months and days gone by. A release from 6 years and 7 months ago now says "6 years ago", not "7 years ago".

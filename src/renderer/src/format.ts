@@ -48,7 +48,8 @@ export function timeAgo(t: number, now = Date.now()): string {
   for (const step of steps) if (abs >= step[1]) unit = step;
   // Up to 5 weeks read better as weeks than as "1 month".
   if (unit[0] === 'month' && abs < 5 * 604800) unit = steps[3]!;
-  return relative.format(Math.round(seconds / unit[1]), unit[0]);
+  // Whole units gone by, as "ago" is counted: 6 years and 7 months is "6 years ago", not 7.
+  return relative.format(Math.trunc(seconds / unit[1]), unit[0]);
 }
 
 export function remoteSummary(r: RemoteInfo): string {
