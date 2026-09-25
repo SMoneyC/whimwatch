@@ -3,6 +3,18 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-09-25
+
+### Added
+
+- WhimWatch is available in Italian. It follows your system's language, and Settings → General → Language picks one yourself. Diagnostics stay in English, so bug reports can be read.
+- WhimWatch is available in Spanish.
+
+### Fixed
+
+- The explanation of why "Continue with Google" can't work inside WhimWatch now appears whatever language Google's page is in, not only English.
+- "Released … ago" and similar counts whole years, months and days gone by. A release from 6 years and 7 months ago now says "6 years ago", not "7 years ago".
+
 ## [0.2.5] - 2026-09-24
 
 ### Added
