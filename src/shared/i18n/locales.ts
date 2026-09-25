@@ -2,7 +2,7 @@
  * The languages WhimWatch can be shown in. Adding one: a catalogue in ./catalogs/<id>.ts, an entry
  * here and in CATALOGS (./index.ts). See "Translating WhimWatch" in CONTRIBUTING.md.
  */
-export const LOCALE_IDS = ['en', 'it'] as const;
+export const LOCALE_IDS = ['en', 'es', 'it'] as const;
 
 export type LocaleId = (typeof LOCALE_IDS)[number];
 
@@ -27,6 +27,8 @@ export interface LocaleInfo {
 export const LOCALE_INFO: Record<LocaleId, LocaleInfo> = {
   // British list style: "wicked.cc, LoversLab and Patreon", without the serial comma, as the copy is written.
   en: { name: 'English', intl: 'en', listIntl: 'en-GB' },
+  // "la semana pasada", "el mes pasado" carry their own article, so they read well after "Publicado".
+  es: { name: 'Español', intl: 'es' },
   it: { name: 'Italiano', intl: 'it', relativeWords: ['second', 'minute', 'hour', 'day'] },
 };
 

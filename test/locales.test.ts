@@ -221,6 +221,29 @@ describe('the log', () => {
   });
 });
 
+describe('Spanish', () => {
+  it('says times, dates, counts and lists the Spanish way', () => {
+    setLocale('es');
+    // Its words for weeks and longer carry their own article, so they stay words.
+    expect(timeAgo(NOW - 8 * DAY, NOW)).toBe('la semana pasada');
+    expect(timeAgo(NOW - 2 * DAY, NOW)).toBe('anteayer');
+    expect(timeAgo(NOW - 3 * 3600_000, NOW)).toBe('hace 3 horas');
+    expect(dayLabel(new Date(2026, 8, 11, 9).getTime(), NOW)).toBe('Viernes, 11 sept');
+    expect(count(12345)).toBe('12.345');
+    expect(list(['wicked.cc', 'LoversLab', 'Patreon'])).toBe('wicked.cc, LoversLab y Patreon');
+    // A million is CLDR's "many" in Spanish; a message with only one and other falls back to other.
+    expect(t().common.files(1_000_000)).toBe('1.000.000 archivos');
+  });
+
+  it('reaches text built outside the window, with the game by its Spanish name', () => {
+    setLocale('es');
+    const off = { key: 'e', name: 'E', files: [], localUpdatedAt: 0, remotes: [], status: 'unknown', mutedSources: ['patreon'] } as CreatorResult;
+    expect(rowSummary(off, (at) => timeAgo(at, NOW))).toBe('Patreon está desactivado');
+    expect(gameWarnings({ scriptModsEnabled: false }, { status: 'unknown' })[0]!.text).toContain('Los Sims 4');
+    expect(t().update.summary([t().update.replaces(1, true), t().update.adds(1, false)])).toBe('Esto reemplaza 1 archivo y añade 1.');
+  });
+});
+
 describe("why a page couldn't be read", () => {
   const page = (extra: Partial<RemoteInfo>): RemoteInfo => ({
     listing: { source: 'loverslab', url: 'https://www.loverslab.com/files/file/1-juniper-petal/', origin: 'directory' },

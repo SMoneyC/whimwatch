@@ -1,0 +1,1 @@
+- WhimWatch is available in Spanish.

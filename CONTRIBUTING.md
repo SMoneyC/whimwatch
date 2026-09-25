@@ -145,7 +145,8 @@ list them; `#` is the number. `list(…)` joins names with your language's "and"
 
 **What not to translate.**
 
-- **Names:** sites, WickedWhims and The Sims 4 keep their names.
+- **Names:** Sites and WickedWhims keep their names. The Sims 4 is called what EA calls it in your
+  language (e.g. "Los Sims 4" in Spanish) to make it easy to find the Mods folder.
 - **Menus in other programs:** write them exactly as that program shows them in your language. For The
   Sims 4's options, open Game Options → Other in your own game and copy the names from there. Patreon's
   menus stay in English, because that's what its site shows.
