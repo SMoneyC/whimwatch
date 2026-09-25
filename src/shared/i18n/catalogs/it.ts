@@ -270,8 +270,8 @@ export const it = {
 
   game: {
     modsOff:
-      'Le mod sono disattivate in The Sims 4 (Opzioni di gioco → Altro → Abilita contenuti personalizzati e mod), quindi niente nella tua cartella Mods verrà caricato.',
-    scriptModsOff: 'Le mod script sono disattivate in The Sims 4 (Opzioni di gioco → Altro → Mod script consentite), quindi WickedWhims non verrà caricato.',
+      'Le mod sono disattivate in The Sims 4 (Opzioni di gioco → Altro → Attiva il contenuto personalizzato e le mod), quindi niente nella tua cartella Mods verrà caricato.',
+    scriptModsOff: 'Le mod script sono disattivate in The Sims 4 (Opzioni di gioco → Altro → Mod dello script permesse), quindi WickedWhims non verrà caricato.',
     wickedWhimsVersion: (version?: string) => (version ? `WickedWhims v${version}` : 'WickedWhims'),
     newer: (installed: string, ww: string, newest: string) =>
       `The Sims 4 è stato aggiornato alla ${installed}, ma ${ww} supporta solo fino alla ${newest}. Le mod script possono smettere di funzionare dopo una patch: valuta di aspettare un aggiornamento di WickedWhims prima di giocare.`,
